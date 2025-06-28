@@ -145,6 +145,7 @@ func main() {
 	go StartPortalServer(db, mwdb)
 	go processWorklist(cfg, db, mwdb)
 	go processSRDetection(cfg, db, mwdb)
+	go simulatorModalitas()
 	for {
 		// Cek status koneksi
 		status := Status{

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Simulator Modalitas DICOM</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<style>
+    body {
+    font-family: sans-serif;
+    padding: 20px;
+    background-color: #f5f5f5;
+    }
+    h1, h2 {
+        color: #333;
+    }
+    button {
+        padding: 8px 16px;
+    }
+
+</style>
+<body>
+    <h1>🖥️ Simulator Modalitas DICOM</h1>
+
+    <h2>📤 Upload File DICOM</h2>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+        <input type="file" name="dicomFile" required>
+        <button type="submit">Upload</button>
+    </form>
+
+    <h2>📂 File DICOM Tersimpan</h2>
+    <ul>
+        {{range $index, $file := .}}
+            <li>
+            {{$file}}
+            <a href="/send?file={{$file}}">[Kirim ke PACS]</a>
+            <a href="/viewer?file={{$file}}" target="_blank">[🧐 Lihat di Viewer]</a>
+            </li>
+
+        {{end}}
+    </ul>
+</body>
+</html>
