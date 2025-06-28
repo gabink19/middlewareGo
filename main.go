@@ -13,7 +13,6 @@ import (
 
 func processWorklist(cfg Config, db, mwdb *sql.DB) {
 	for {
-		SavePortalLog(mwdb, "[Worklist] Mulai proses loop worklist")
 		worklists, err := GetPendingWorklist(db, time.Now().Format("2006-01-02"))
 		if err != nil {
 			log.Printf("Gagal ambil worklist: %v", err)
@@ -22,11 +21,9 @@ func processWorklist(cfg Config, db, mwdb *sql.DB) {
 			time.Sleep(10 * time.Second)
 			continue
 		}
-		SavePortalLog(mwdb, "[Worklist] Jumlah worklist ditemukan: "+fmt.Sprint(len(worklists)))
 		// var wlPortal []Worklist
 		for _, wl := range worklists {
 			if IsWorklistSent(mwdb, wl.AccessionNumber) {
-				SavePortalLog(mwdb, "[Worklist] Worklist "+wl.AccessionNumber+" sudah pernah dikirim, skip.")
 				continue
 			}
 			SavePortalLog(mwdb, "[Worklist] Proses kirim worklist "+wl.AccessionNumber)
@@ -41,13 +38,11 @@ func processWorklist(cfg Config, db, mwdb *sql.DB) {
 			SavePortalLog(mwdb, "[Worklist] Worklist "+wl.AccessionNumber+" dikirim ke Orthanc")
 			InsertSentWorklist(mwdb, wl.AccessionNumber, string(marsh))
 		}
-		SavePortalLog(mwdb, "[Worklist] Selesai proses loop worklist")
 		time.Sleep(30 * time.Second)
 	}
 }
 
 func processSRDetection(cfg Config, db, mwdb *sql.DB) {
-	SavePortalLog(mwdb, "[SR] Mulai proses deteksi SR dari Orthanc (webhook)")
 	srStudies, err := DetectSRStudiesFromOrthanc(cfg)
 	if err != nil {
 		log.Printf("Gagal deteksi SR dari Orthanc: %v", err)
@@ -118,7 +113,6 @@ func processSRDetection(cfg Config, db, mwdb *sql.DB) {
 			}
 		}
 	}
-	SavePortalLog(mwdb, "[SR] Selesai proses deteksi SR (webhook)")
 }
 
 func processSRWebhook(cfg Config, db, mwdb *sql.DB, w http.ResponseWriter, r *http.Request) {

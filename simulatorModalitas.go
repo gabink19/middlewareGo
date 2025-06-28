@@ -112,14 +112,9 @@ func worklistHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Tambahkan simulasi query C-FIND MWL ke Orthanc
-	orthancAET := "ORTHANC"      // AE Title Orthanc default
-	queryFile := "mwl_query.dcm" // File query DICOM C-FIND
-	cmd := exec.Command("findscu", "-v", "-S", "-aec", orthancAET, config.PACSIP, "5678", queryFile)
-	out, err := cmd.CombinedOutput()
-
+	// Tampilkan isi semua file .wl dalam satu tabel gabungan (tanpa nama file)
 	w.Header().Set("Content-Type", "text/html")
-	fmt.Fprintf(w, "<h2>Daftar & Isi Worklist (.wl)</h2><table border='1' cellpadding='5'><tr><th>Nama File</th><th>Isi File</th></tr>")
+	fmt.Fprintf(w, "<h2>Isi Semua Worklist (.wl)</h2><table border='1' cellpadding='5' style='font-family:monospace;'><tbody>")
 	files, err := os.ReadDir(worklistDir)
 	if err == nil {
 		for _, f := range files {
@@ -127,15 +122,40 @@ func worklistHandler(w http.ResponseWriter, r *http.Request) {
 				fullPath := filepath.Join(worklistDir, f.Name())
 				content, err := os.ReadFile(fullPath)
 				if err != nil {
-					fmt.Fprintf(w, "<tr><td>%s</td><td style='color:red;'>Gagal baca file</td></tr>", f.Name())
 					continue
 				}
-				fmt.Fprintf(w, "<tr><td><a href='/mod/worklist?file=%s'>%s</a></td><td><pre style='white-space:pre-wrap;'>%s</pre></td></tr>", f.Name(), f.Name(), template.HTMLEscapeString(string(content)))
+				// Setiap baris isi file menjadi baris tabel
+				lines := template.HTMLEscapeString(string(content))
+				for _, line := range splitLines(lines) {
+					if len(line) > 0 {
+						fmt.Fprintf(w, "<tr><td>%s</td></tr>", line)
+					}
+				}
 			}
 		}
 	}
-	fmt.Fprintf(w, "</table>")
+	fmt.Fprintf(w, "</tbody></table>")
 
 	// Tampilkan hasil C-FIND MWL
+	orthancAET := "ORTHANC"
+	queryFile := "mwl_query.dcm"
+	cmd := exec.Command("findscu", "-v", "-S", "-aec", orthancAET, config.PACSIP, "5678", queryFile)
+	out, _ := cmd.CombinedOutput()
 	fmt.Fprintf(w, "<h2>Hasil Query C-FIND MWL (findscu)</h2><pre style='background:#eee;padding:10px;'>%s</pre>", template.HTMLEscapeString(string(out)))
+}
+
+// splitLines membagi string menjadi slice baris (tanpa \r\n)
+func splitLines(s string) []string {
+	var lines []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			lines = append(lines, s[start:i])
+			start = i + 1
+		}
+	}
+	if start < len(s) {
+		lines = append(lines, s[start:])
+	}
+	return lines
 }

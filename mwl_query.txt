@@ -1,0 +1,7 @@
+(0008,0052) CS [WORKLIST]                #  8, 1 QueryRetrieveLevel
+(0010,0010) PN []                        #  0, 0 PatientName
+(0010,0020) LO []                        #  0, 0 PatientID
+(0020,000D) UI []                        #  0, 0 StudyInstanceUID
+(0008,0020) DA []                        #  0, 0 StudyDate
+(0032,1032) PN []                        #  0, 0 RequestingPhysician
+(0040,0100) SQ []                        #  0, 0 ScheduledProcedureStepSequence
