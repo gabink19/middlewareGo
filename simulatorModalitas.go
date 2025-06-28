@@ -3,12 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"io"
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 )
 
@@ -33,10 +31,7 @@ func simulatorModalitas() {
 
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	http.HandleFunc("/mod", indexHandler)
-	http.HandleFunc("/mod/upload", uploadHandler)
-	http.HandleFunc("/mod/send", sendHandler)
-	http.HandleFunc("/mod/viewer", viewerHandler)
-	http.HandleFunc("/mod/worklist", worklistHandler) // Endpoint baru untuk simulasi ambil worklist dari Orthanc
+	http.HandleFunc("/mod/store", storeHandler)
 	http.Handle("/mod/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("uploads"))))
 	http.Handle("/mod/viewer_static/", http.StripPrefix("/viewer_static/", http.FileServer(http.Dir("viewer/dwv"))))
 
@@ -45,77 +40,31 @@ func simulatorModalitas() {
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-	tmpl := template.Must(template.ParseFiles("templates/index.html"))
-	tmpl.Execute(w, config)
-}
-
-func uploadHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		http.Redirect(w, r, "/mod", http.StatusSeeOther)
-		return
-	}
-	file, handler, err := r.FormFile("dicomFile")
-	if err != nil {
-		http.Error(w, "Gagal ambil file", 500)
-		return
-	}
-	defer file.Close()
-
-	f, err := os.Create(filepath.Join(config.StoreDir, handler.Filename))
-	if err != nil {
-		http.Error(w, "Gagal simpan file", 500)
-		return
-	}
-	defer f.Close()
-	io.Copy(f, file)
-
-	log.Println("📥 DICOM berhasil di-upload:", handler.Filename)
-	http.Redirect(w, r, "/mod", http.StatusSeeOther)
-}
-
-func sendHandler(w http.ResponseWriter, r *http.Request) {
-	file := r.URL.Query().Get("file")
-	fullPath := filepath.Join(config.StoreDir, file)
-
-	cmd := exec.Command("storescu", "-v", "-aec", config.AETitle, config.PACSIP, config.PACSPort, fullPath)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		http.Error(w, fmt.Sprintf("❌ Gagal kirim DICOM: %s", string(out)), 500)
-		return
-	}
-	log.Println("📤 DICOM berhasil dikirim ke PACS:", file)
-	http.Redirect(w, r, "/mod", http.StatusSeeOther)
-}
-func viewerHandler(w http.ResponseWriter, r *http.Request) {
-	file := r.URL.Query().Get("file")
-	tmpl := template.Must(template.ParseFiles("viewer/viewer.html"))
-	tmpl.Execute(w, map[string]string{"File": file})
-}
-
-// Handler untuk simulasi modalitas mengambil worklist berupa file .wl dari folder lokal
-func worklistHandler(w http.ResponseWriter, r *http.Request) {
 	worklistDir := os.Getenv("FOLDER_WORKLIST")
 	os.MkdirAll(worklistDir, os.ModePerm)
 
-	file := r.URL.Query().Get("file")
-	if file != "" {
-		// Jika ada parameter file, tampilkan/unduh file .wl
-		fullPath := filepath.Join(worklistDir, file)
-		f, err := os.Open(fullPath)
-		if err != nil {
-			http.Error(w, "File tidak ditemukan", 404)
-			return
-		}
-		defer f.Close()
-		w.Header().Set("Content-Type", "text/plain")
-		w.Header().Set("Content-Disposition", "attachment; filename="+file)
-		io.Copy(w, f)
-		return
-	}
-
-	// Tampilkan isi semua file .wl dalam satu tabel gabungan (header: PatientID, PatientName, AccessionNumber, Modality)
 	w.Header().Set("Content-Type", "text/html")
-	fmt.Fprintf(w, "<h2>Isi Semua Worklist (.wl)</h2><table border='1' cellpadding='5' style='font-family:monospace;'><thead><tr><th>PatientID</th><th>PatientName</th><th>AccessionNumber</th><th>Modality</th></tr></thead><tbody>")
+	fmt.Fprintf(w, `<style>
+	body { background: #f4f8fb; font-family: 'Segoe UI', Arial, sans-serif; }
+	.header-mod { background: #2a4d7a; color: #fff; padding: 24px 0 12px 0; text-align: center; letter-spacing: 2px; font-size: 2.1em; font-weight: 600; box-shadow: 0 2px 8px #b0c4de; }
+	.worklist-table { border-collapse: collapse; width: 92%%; margin: 24px auto 0 auto; background: #fff; box-shadow: 0 2px 8px #ccc; border-radius: 8px; overflow: hidden; }
+	.worklist-table th, .worklist-table td { border: 1px solid #bbb; padding: 10px 18px; text-align: left; font-size: 1.08em; }
+	.worklist-table th { background: #eaf1fa; color: #2a4d7a; font-weight: 600; }
+	.worklist-table tr:nth-child(even) { background: #f7fafd; }
+	.worklist-table tr:hover { background: #e6f7ff; }
+	.worklist-title { text-align:center; color:#2a4d7a; margin-top:32px; font-size:1.3em; letter-spacing:1px; }
+	.upload-form { width:92%%; margin:24px auto 0 auto; background:#f7f7f7; padding:18px; border-radius:8px; box-shadow:0 1px 4px #ccc; display:flex; align-items:center; gap:12px; }
+	.upload-form label { font-weight:500; color:#2a4d7a; }
+	.upload-form input[type=file] { margin-right:10px; }
+	.upload-form button { padding:7px 22px; background:#2a4d7a; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:1em; }
+	.upload-form button:hover { background:#1a3550; }
+	.action-btn { padding:6px 16px; background:#4caf50; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:0.98em; }
+	.action-btn:hover { background:#357a38; }
+</style>`)
+	fmt.Fprintf(w, `<div class='header-mod'>Simulator Modalitas Radiologi</div>`)
+
+	// Tabel worklist
+	fmt.Fprintf(w, `<h2 class='worklist-title'>Worklist Pasien (Simulasi Modalitas)</h2><table class='worklist-table'><thead><tr><th>PatientID</th><th>PatientName</th><th>AccessionNumber</th><th>Modality</th></tr></thead><tbody>`)
 	files, err := os.ReadDir(worklistDir)
 	if err == nil {
 		for _, f := range files {
@@ -125,7 +74,6 @@ func worklistHandler(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					continue
 				}
-				// Coba parse JSON worklist
 				var wl struct {
 					PatientID       string `json:"PatientID"`
 					PatientName     string `json:"PatientName"`
@@ -140,12 +88,47 @@ func worklistHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	fmt.Fprintf(w, "</tbody></table>")
+	// Form store DICOM ke PACS (Orthanc)
+	fmt.Fprintf(w, `<form class='upload-form' id='uploadForm' action='/mod/store' method='post' enctype='multipart/form-data'>
+		<label>Store DICOM ke PACS (Orthanc):</label>
+		<input type='file' name='dicomFile' required>
+		<button type='submit'>Store ke PACS</button>
+	</form>`)
 
-	// Tampilkan hasil C-FIND ke Orthanc (tanpa MWL, misal query study list)
-	orthancAET := "ORTHANC"
-	cmd := exec.Command("findscu", "-v", "-S", "-aec", orthancAET, os.Getenv("ORTHANC_IP"), os.Getenv("ORTHANC_PORT"))
-	out, _ := cmd.CombinedOutput()
-	fmt.Fprintf(w, "<h2>Hasil Query C-FIND Study List (findscu)</h2><pre style='background:#eee;padding:10px;'>%s</pre>", template.HTMLEscapeString(string(out)))
+	// Tambahkan script AJAX upload + alert
+	fmt.Fprintf(w, `<script>
+	document.getElementById('uploadForm').onsubmit = function(e) {
+		e.preventDefault();
+		var form = this;
+		var data = new FormData(form);
+		var xhr = new XMLHttpRequest();
+		xhr.open('POST', form.action, true);
+		xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+		xhr.onreadystatechange = function() {
+			if (xhr.readyState == 4) {
+				if (xhr.status == 200) {
+					try {
+						var resp = JSON.parse(xhr.responseText);
+						alert('Sukses: ' + (resp.message || 'DICOM berhasil di-store ke Orthanc!'));
+						form.reset();
+						window.location.reload();
+					} catch (e) {
+						alert('Sukses, tapi response tidak valid!');
+						window.location.reload();
+					}
+				} else {
+					try {
+						var resp = JSON.parse(xhr.responseText);
+						alert('Gagal: ' + (resp.error || xhr.statusText));
+					} catch (e) {
+						alert('Gagal upload: ' + xhr.responseText);
+					}
+				}
+			}
+		};
+		xhr.send(data);
+	};
+</script>`)
 }
 
 // splitLines membagi string menjadi slice baris (tanpa \r\n)
@@ -162,4 +145,74 @@ func splitLines(s string) []string {
 		lines = append(lines, s[start:])
 	}
 	return lines
+}
+
+func storeHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Redirect(w, r, "/mod", http.StatusSeeOther)
+		return
+	}
+	file, handler, err := r.FormFile("dicomFile")
+	if err != nil {
+		respondStoreError(w, "Gagal ambil file DICOM", 500)
+		return
+	}
+	defer file.Close()
+
+	// Simpan file sementara
+	tempPath := filepath.Join(os.TempDir(), handler.Filename)
+	f, err := os.Create(tempPath)
+	if err != nil {
+		respondStoreError(w, "Gagal simpan file sementara", 500)
+		return
+	}
+	defer f.Close()
+	io.Copy(f, file)
+
+	dicomPath := tempPath
+
+	// Kirim ke Orthanc REST API /instances
+	orthancURL := os.Getenv("ORTHANC_URL")
+	storeURL := orthancURL + "/instances"
+	f2, err := os.Open(dicomPath)
+	if err != nil {
+		respondStoreError(w, "Gagal buka file untuk upload ke Orthanc", 500)
+		return
+	}
+	defer f2.Close()
+	resp, err := http.Post(storeURL, "application/dicom", f2)
+	if err != nil {
+		respondStoreError(w, "Gagal upload ke Orthanc: "+err.Error(), 500)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		msg, _ := io.ReadAll(resp.Body)
+		respondStoreError(w, fmt.Sprintf("Orthanc error: %s", string(msg)), 500)
+		return
+	}
+	log.Println("📤 DICOM berhasil di-store ke Orthanc REST API:", handler.Filename)
+	if isAjax(r) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": fmt.Sprintf("DICOM '%s' berhasil di-store ke Orthanc!", handler.Filename),
+		})
+	} else {
+		http.Redirect(w, r, "/mod", http.StatusSeeOther)
+	}
+}
+
+func isAjax(r *http.Request) bool {
+	return r.Header.Get("X-Requested-With") == "XMLHttpRequest" || r.Header.Get("Accept") == "application/json"
+}
+
+func respondStoreError(w http.ResponseWriter, msg string, code int) {
+	if code == 0 {
+		code = 500
+	}
+	if w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "application/json")
+	}
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
