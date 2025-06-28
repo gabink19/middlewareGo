@@ -143,7 +143,7 @@ func worklistHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Tampilkan hasil C-FIND ke Orthanc (tanpa MWL, misal query study list)
 	orthancAET := "ORTHANC"
-	cmd := exec.Command("findscu", "-v", "-S", "-aec", orthancAET, config.PACSIP, "4242")
+	cmd := exec.Command("findscu", "-v", "-S", "-aec", orthancAET, os.Getenv("ORTHANC_IP"), os.Getenv("ORTHANC_PORT"))
 	out, _ := cmd.CombinedOutput()
 	fmt.Fprintf(w, "<h2>Hasil Query C-FIND Study List (findscu)</h2><pre style='background:#eee;padding:10px;'>%s</pre>", template.HTMLEscapeString(string(out)))
 }
