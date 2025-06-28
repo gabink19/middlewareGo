@@ -40,8 +40,8 @@ func simulatorModalitas() {
 	http.Handle("/mod/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("uploads"))))
 	http.Handle("/mod/viewer_static/", http.StripPrefix("/viewer_static/", http.FileServer(http.Dir("viewer/dwv"))))
 
-	log.Println("Simulator modalitas berjalan di http://localhost:8090/mod")
-	log.Fatal(http.ListenAndServe(":8090", nil))
+	log.Println("Simulator modalitas berjalan di http://localhost:8000/mod")
+	log.Fatal(http.ListenAndServe(":8000", nil))
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
@@ -113,9 +113,9 @@ func worklistHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Tampilkan isi semua file .wl dalam satu tabel gabungan (tanpa nama file)
+	// Tampilkan isi semua file .wl dalam satu tabel gabungan (header: PatientID, PatientName, AccessionNumber, Modality)
 	w.Header().Set("Content-Type", "text/html")
-	fmt.Fprintf(w, "<h2>Isi Semua Worklist (.wl)</h2><table border='1' cellpadding='5' style='font-family:monospace;'><tbody>")
+	fmt.Fprintf(w, "<h2>Isi Semua Worklist (.wl)</h2><table border='1' cellpadding='5' style='font-family:monospace;'><thead><tr><th>PatientID</th><th>PatientName</th><th>AccessionNumber</th><th>Modality</th></tr></thead><tbody>")
 	files, err := os.ReadDir(worklistDir)
 	if err == nil {
 		for _, f := range files {
@@ -125,12 +125,16 @@ func worklistHandler(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					continue
 				}
-				// Setiap baris isi file menjadi baris tabel
-				lines := template.HTMLEscapeString(string(content))
-				for _, line := range splitLines(lines) {
-					if len(line) > 0 {
-						fmt.Fprintf(w, "<tr><td>%s</td></tr>", line)
-					}
+				// Coba parse JSON worklist
+				var wl struct {
+					PatientID       string `json:"PatientID"`
+					PatientName     string `json:"PatientName"`
+					AccessionNumber string `json:"AccessionNumber"`
+					Modality        string `json:"Modality"`
+				}
+				if err := json.Unmarshal(content, &wl); err == nil {
+					fmt.Fprintf(w, "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>",
+						wl.PatientID, wl.PatientName, wl.AccessionNumber, wl.Modality)
 				}
 			}
 		}
@@ -142,48 +146,6 @@ func worklistHandler(w http.ResponseWriter, r *http.Request) {
 	cmd := exec.Command("findscu", "-v", "-S", "-aec", orthancAET, config.PACSIP, "4242")
 	out, _ := cmd.CombinedOutput()
 	fmt.Fprintf(w, "<h2>Hasil Query C-FIND Study List (findscu)</h2><pre style='background:#eee;padding:10px;'>%s</pre>", template.HTMLEscapeString(string(out)))
-
-	// Tampilkan tabel PatientID, PatientName, AccessionNumber, Modality dari Orthanc REST API
-	fmt.Fprintf(w, "<h2>Daftar Study Orthanc</h2><table border='1' cellpadding='5'><tr><th>PatientID</th><th>PatientName</th><th>AccessionNumber</th><th>Modality</th></tr>")
-	orthancURL := "http://" + config.PACSIP + ":8042"
-	resp, err := http.Get(orthancURL + "/studies")
-	if err == nil && resp.StatusCode == 200 {
-		var studyIDs []string
-		if err := json.NewDecoder(resp.Body).Decode(&studyIDs); err == nil {
-			for _, id := range studyIDs {
-				studyResp, err := http.Get(orthancURL + "/studies/" + id)
-				if err != nil || studyResp.StatusCode != 200 {
-					continue
-				}
-				var study struct {
-					MainDicomTags struct {
-						PatientID       string `json:"PatientID"`
-						PatientName     string `json:"PatientName"`
-						AccessionNumber string `json:"AccessionNumber"`
-					} `json:"MainDicomTags"`
-					Series []struct {
-						MainDicomTags struct {
-							Modality string `json:"Modality"`
-						} `json:"MainDicomTags"`
-					} `json:"Series"`
-				}
-				if err := json.NewDecoder(studyResp.Body).Decode(&study); err == nil {
-					modality := ""
-					if len(study.Series) > 0 {
-						modality = study.Series[0].MainDicomTags.Modality
-					}
-					fmt.Fprintf(w, "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>",
-						study.MainDicomTags.PatientID,
-						study.MainDicomTags.PatientName,
-						study.MainDicomTags.AccessionNumber,
-						modality)
-				}
-				studyResp.Body.Close()
-			}
-		}
-		resp.Body.Close()
-	}
-	fmt.Fprintf(w, "</table>")
 }
 
 // splitLines membagi string menjadi slice baris (tanpa \r\n)
