@@ -93,7 +93,7 @@ func viewerHandler(w http.ResponseWriter, r *http.Request) {
 
 // Handler untuk simulasi modalitas mengambil worklist berupa file .wl dari folder lokal
 func worklistHandler(w http.ResponseWriter, r *http.Request) {
-	worklistDir := os.Getenv("FOLDER_WORKLIST") // Folder penyimpanan file .wl
+	worklistDir := os.Getenv("FOLDER_WORKLIST")
 	os.MkdirAll(worklistDir, os.ModePerm)
 
 	file := r.URL.Query().Get("file")
@@ -112,18 +112,30 @@ func worklistHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Jika tidak ada parameter file, tampilkan daftar file .wl
-	files, err := os.ReadDir(worklistDir)
-	if err != nil {
-		http.Error(w, "Gagal membaca folder worklists", 500)
-		return
-	}
+	// Tambahkan simulasi query C-FIND MWL ke Orthanc
+	orthancAET := "ORTHANC"      // AE Title Orthanc default
+	queryFile := "mwl_query.dcm" // File query DICOM C-FIND
+	cmd := exec.Command("findscu", "-v", "-S", "-aec", orthancAET, config.PACSIP, "5678", queryFile)
+	out, err := cmd.CombinedOutput()
+
 	w.Header().Set("Content-Type", "text/html")
-	fmt.Fprintf(w, "<h2>Daftar Worklist (.wl)</h2><ul>")
-	for _, f := range files {
-		if !f.IsDir() && filepath.Ext(f.Name()) == ".wl" {
-			fmt.Fprintf(w, "<li><a href='/mod/worklist?file=%s'>%s</a></li>", f.Name(), f.Name())
+	fmt.Fprintf(w, "<h2>Daftar & Isi Worklist (.wl)</h2><table border='1' cellpadding='5'><tr><th>Nama File</th><th>Isi File</th></tr>")
+	files, err := os.ReadDir(worklistDir)
+	if err == nil {
+		for _, f := range files {
+			if !f.IsDir() && filepath.Ext(f.Name()) == ".wl" {
+				fullPath := filepath.Join(worklistDir, f.Name())
+				content, err := os.ReadFile(fullPath)
+				if err != nil {
+					fmt.Fprintf(w, "<tr><td>%s</td><td style='color:red;'>Gagal baca file</td></tr>", f.Name())
+					continue
+				}
+				fmt.Fprintf(w, "<tr><td><a href='/mod/worklist?file=%s'>%s</a></td><td><pre style='white-space:pre-wrap;'>%s</pre></td></tr>", f.Name(), f.Name(), template.HTMLEscapeString(string(content)))
+			}
 		}
 	}
-	fmt.Fprintf(w, "</ul>")
+	fmt.Fprintf(w, "</table>")
+
+	// Tampilkan hasil C-FIND MWL
+	fmt.Fprintf(w, "<h2>Hasil Query C-FIND MWL (findscu)</h2><pre style='background:#eee;padding:10px;'>%s</pre>", template.HTMLEscapeString(string(out)))
 }
