@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
@@ -136,12 +137,53 @@ func worklistHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(w, "</tbody></table>")
 
-	// Tampilkan hasil C-FIND MWL
+	// Tampilkan hasil C-FIND ke Orthanc (tanpa MWL, misal query study list)
 	orthancAET := "ORTHANC"
-	queryFile := "mwl_query.dcm"
-	cmd := exec.Command("findscu", "-v", "-S", "-aec", orthancAET, config.PACSIP, "5678", queryFile)
+	cmd := exec.Command("findscu", "-v", "-S", "-aec", orthancAET, config.PACSIP, "4242")
 	out, _ := cmd.CombinedOutput()
-	fmt.Fprintf(w, "<h2>Hasil Query C-FIND MWL (findscu)</h2><pre style='background:#eee;padding:10px;'>%s</pre>", template.HTMLEscapeString(string(out)))
+	fmt.Fprintf(w, "<h2>Hasil Query C-FIND Study List (findscu)</h2><pre style='background:#eee;padding:10px;'>%s</pre>", template.HTMLEscapeString(string(out)))
+
+	// Tampilkan tabel PatientID, PatientName, AccessionNumber, Modality dari Orthanc REST API
+	fmt.Fprintf(w, "<h2>Daftar Study Orthanc</h2><table border='1' cellpadding='5'><tr><th>PatientID</th><th>PatientName</th><th>AccessionNumber</th><th>Modality</th></tr>")
+	orthancURL := "http://" + config.PACSIP + ":8042"
+	resp, err := http.Get(orthancURL + "/studies")
+	if err == nil && resp.StatusCode == 200 {
+		var studyIDs []string
+		if err := json.NewDecoder(resp.Body).Decode(&studyIDs); err == nil {
+			for _, id := range studyIDs {
+				studyResp, err := http.Get(orthancURL + "/studies/" + id)
+				if err != nil || studyResp.StatusCode != 200 {
+					continue
+				}
+				var study struct {
+					MainDicomTags struct {
+						PatientID       string `json:"PatientID"`
+						PatientName     string `json:"PatientName"`
+						AccessionNumber string `json:"AccessionNumber"`
+					} `json:"MainDicomTags"`
+					Series []struct {
+						MainDicomTags struct {
+							Modality string `json:"Modality"`
+						} `json:"MainDicomTags"`
+					} `json:"Series"`
+				}
+				if err := json.NewDecoder(studyResp.Body).Decode(&study); err == nil {
+					modality := ""
+					if len(study.Series) > 0 {
+						modality = study.Series[0].MainDicomTags.Modality
+					}
+					fmt.Fprintf(w, "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>",
+						study.MainDicomTags.PatientID,
+						study.MainDicomTags.PatientName,
+						study.MainDicomTags.AccessionNumber,
+						modality)
+				}
+				studyResp.Body.Close()
+			}
+		}
+		resp.Body.Close()
+	}
+	fmt.Fprintf(w, "</table>")
 }
 
 // splitLines membagi string menjadi slice baris (tanpa \r\n)
