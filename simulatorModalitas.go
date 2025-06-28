@@ -93,7 +93,7 @@ func viewerHandler(w http.ResponseWriter, r *http.Request) {
 
 // Handler untuk simulasi modalitas mengambil worklist berupa file .wl dari folder lokal
 func worklistHandler(w http.ResponseWriter, r *http.Request) {
-	worklistDir := "./worklists" // Folder penyimpanan file .wl
+	worklistDir := os.Getenv("FOLDER_WORKLIST") // Folder penyimpanan file .wl
 	os.MkdirAll(worklistDir, os.ModePerm)
 
 	file := r.URL.Query().Get("file")
