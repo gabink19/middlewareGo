@@ -8,17 +8,21 @@ import (
 )
 
 type WorklistRequest struct {
-	PatientID                       string
-	PatientName                     string
-	PatientBirthDate                string
-	PatientSex                      string
-	AccessionNumber                 string
-	RequestedProcedureID            *string
-	RequestedProcedureDescription   *string
-	ScheduledProcedureStepID        string
-	ScheduledProcedureStepStartDate string
-	ScheduledProcedureStepStartTime string
-	Modality                        string
+	PatientID                         string
+	PatientName                       string
+	AccessionNumber                   string
+	PatientBirthDate                  string
+	PatientSex                        string
+	RequestedProcedureID              string
+	RequestedProcedureDescription     string
+	ScheduledProcedureStepID          string
+	ScheduledProcedureStepStartDate   string
+	ScheduledProcedureStepStartTime   string
+	Modality                          string
+	ScheduledStationAETitle           string
+	ScheduledStationName              string
+	ScheduledProcedureStepDescription string
+	ScheduledPerformingPhysicianName  string
 }
 
 func ConnectKhanzaDB(cfg Config) (*sql.DB, error) {
@@ -44,10 +48,10 @@ func GetPendingWorklist(db *sql.DB, tglPermintaan string) ([]WorklistRequest, er
         WHEN 'P' THEN 'F'
         ELSE 'O'
     END AS PatientSex,
-    pr.no_rawat AS AccessionNumber,
-    pj.kd_jenis_prw AS RequestedProcedureID,
-    jpr.nm_perawatan AS RequestedProcedureDescription,
-    CONCAT(pr.no_rawat, DATE_FORMAT(pr.tgl_permintaan, '%Y%m%d'), REPLACE(pr.jam_permintaan, ':', '')) AS ScheduledProcedureStepID,
+    pr.noorder AS AccessionNumber,
+	IFNULL(pj.kd_jenis_prw, '') AS RequestedProcedureID,
+	IFNULL(jpr.nm_perawatan, '') AS RequestedProcedureDescription,
+    CONCAT(pr.noorder, DATE_FORMAT(pr.tgl_permintaan, '%Y%m%d'), REPLACE(pr.jam_permintaan, ':', '')) AS ScheduledProcedureStepID,
     DATE_FORMAT(pr.tgl_permintaan, '%Y%m%d') AS ScheduledProcedureStepStartDate,
     REPLACE(pr.jam_permintaan, ':', '') AS ScheduledProcedureStepStartTime,
     CASE

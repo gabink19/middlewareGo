@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -65,26 +66,29 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Tabel worklist
 	fmt.Fprintf(w, `<h2 class='worklist-title'>Worklist Pasien (Simulasi Modalitas)</h2><table class='worklist-table'><thead><tr><th>PatientID</th><th>PatientName</th><th>AccessionNumber</th><th>Modality</th></tr></thead><tbody>`)
-	files, err := os.ReadDir(worklistDir)
-	if err == nil {
-		for _, f := range files {
-			if !f.IsDir() && filepath.Ext(f.Name()) == ".wl" {
-				fullPath := filepath.Join(worklistDir, f.Name())
-				content, err := os.ReadFile(fullPath)
-				if err != nil {
-					continue
-				}
-				var wl struct {
-					PatientID       string `json:"PatientID"`
-					PatientName     string `json:"PatientName"`
-					AccessionNumber string `json:"AccessionNumber"`
-					Modality        string `json:"Modality"`
-				}
-				if err := json.Unmarshal(content, &wl); err == nil {
-					fmt.Fprintf(w, "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>",
-						wl.PatientID, wl.PatientName, wl.AccessionNumber, wl.Modality)
-				}
-			}
+	// Ambil worklist dari Orthanc REST API (C-FIND)
+	orthancURL := os.Getenv("ORTHANC_URL")
+	findURL := orthancURL + "/tools/find"
+	// Query worklist: ModalityWorklist (MWL)
+	query := map[string]interface{}{
+		"Level": "Worklist",
+		"Query": map[string]interface{}{},
+	}
+	client := &http.Client{}
+	jsonQuery, _ := json.Marshal(query)
+	req, _ := http.NewRequest("POST", findURL, bytes.NewReader(jsonQuery))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err == nil && resp.StatusCode == 200 {
+		defer resp.Body.Close()
+		var results []map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&results)
+		for _, item := range results {
+			patID := getDicomStr(item, "0010,0020")
+			patName := getDicomStr(item, "0010,0010")
+			accNum := getDicomStr(item, "0008,0050")
+			modality := getDicomStr(item, "0008,0060")
+			fmt.Fprintf(w, "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>", patID, patName, accNum, modality)
 		}
 	}
 	fmt.Fprintf(w, "</tbody></table>")
@@ -215,4 +219,19 @@ func respondStoreError(w http.ResponseWriter, msg string, code int) {
 	}
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
+// Helper untuk ambil string DICOM tag dari hasil Orthanc REST API
+func getDicomStr(m map[string]interface{}, tag string) string {
+	if v, ok := m[tag]; ok {
+		if arr, ok := v.([]interface{}); ok && len(arr) > 0 {
+			if s, ok := arr[0].(string); ok {
+				return s
+			}
+		}
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
 }

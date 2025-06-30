@@ -3,11 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
-	"strings"
-	"time"
+	"os/exec"
+	"path/filepath"
 )
 
 type DicomWorklist struct {
@@ -22,34 +21,62 @@ type OrthancStudy struct {
 	PatientID        string `json:"MainDicomTags.PatientID"`
 }
 
-// Kirim worklist ke Orthanc dengan field DICOM dari WorklistRequest
 func SendWorklistToOrthanc(cfg Config, wl WorklistRequest) error {
-	payload := map[string]interface{}{
-		"PatientName":                     wl.PatientName,
-		"PatientID":                       wl.PatientID,
-		"PatientBirthDate":                wl.PatientBirthDate,
-		"PatientSex":                      wl.PatientSex,
-		"AccessionNumber":                 wl.AccessionNumber,
-		"RequestedProcedureID":            wl.RequestedProcedureID,
-		"RequestedProcedureDescription":   wl.RequestedProcedureDescription,
-		"ScheduledProcedureStepID":        wl.ScheduledProcedureStepID,
-		"ScheduledProcedureStepStartDate": wl.ScheduledProcedureStepStartDate,
-		"ScheduledProcedureStepStartTime": wl.ScheduledProcedureStepStartTime,
-		"Modality":                        wl.Modality,
+	dir := os.Getenv("FOLDER_WORKLIST")
+	if dir == "" {
+		dir = "./worklists"
 	}
-	jsonData, _ := json.MarshalIndent(payload, "", "  ")
-	accssNmbr := strings.ReplaceAll(wl.AccessionNumber, "/", "-")
-	filename := os.Getenv("FOLDER_WORKLIST") + accssNmbr + "_" + time.Now().Format("20060102_150405") + ".wl"
-	file, err := os.Create(filename)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("gagal membuat folder: %v", err)
+	}
+
+	// Nama file sementara (format txt) dan output
+	txtPath := filepath.Join(dir, wl.AccessionNumber+".txt")
+	wlPath := filepath.Join(dir, wl.AccessionNumber+".wl")
+
+	// Isi template file TXT Worklist
+	txtContent := fmt.Sprintf(`(0010,0010) PN [%s]
+(0010,0020) LO [%s]
+(0008,0050) SH [%s]
+(0008,0060) CS [%s]
+(0032,1060) LO [%s]
+(0040,0100) SQ
+  (0040,0001) AE [%s]
+  (0040,0002) DA [%s]
+  (0040,0003) TM [%s]
+  (0040,0006) PN [%s]
+  (0040,0007) LO [%s]
+  (0040,0009) SH [%s]
+  (0040,0010) SH [%s]
+  (0040,0020) CS [SCHEDULED]
+`,
+		wl.PatientName,
+		wl.PatientID,
+		wl.AccessionNumber,
+		wl.Modality,
+		wl.RequestedProcedureDescription,
+		wl.ScheduledStationAETitle,
+		wl.ScheduledProcedureStepStartDate,
+		wl.ScheduledProcedureStepStartTime,
+		wl.ScheduledPerformingPhysicianName,
+		wl.ScheduledProcedureStepDescription,
+		wl.ScheduledProcedureStepID,
+		wl.ScheduledStationName,
+	)
+
+	// Simpan file .txt
+	if err := os.WriteFile(txtPath, []byte(txtContent), 0644); err != nil {
+		return fmt.Errorf("gagal menyimpan file TXT DICOM: %v", err)
+	}
+
+	// Jalankan dump2dcm untuk membuat file .wl
+	cmd := exec.Command("dump2dcm", txtPath, wlPath)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return err
+		return fmt.Errorf("gagal menjalankan dump2dcm: %v\n%s", err, string(output))
 	}
-	defer file.Close()
-	_, err = file.Write(jsonData)
-	if err != nil {
-		return err
-	}
-	log.Printf("Worklist file written: %s", filename)
+
+	fmt.Printf("✅ Worklist berhasil dibuat: %s\n", wlPath)
 	return nil
 }
 
