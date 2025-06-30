@@ -230,7 +230,6 @@ func main() {
 
 	go StartPortalServer(db, mwdb)
 	go processWorklist(cfg, db, mwdb)
-	go simulatorModalitas()
 
 	http.HandleFunc("/webhook", func(w http.ResponseWriter, r *http.Request) {
 		processSRWebhook(cfg, db, mwdb, w, r)
