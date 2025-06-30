@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -30,25 +31,26 @@ func SendWorklistToOrthanc(cfg Config, wl WorklistRequest) error {
 		return fmt.Errorf("gagal membuat folder: %v", err)
 	}
 
-	// Nama file sementara (format txt) dan output
 	txtPath := filepath.Join(dir, wl.AccessionNumber+".txt")
 	wlPath := filepath.Join(dir, wl.AccessionNumber+".wl")
 
-	// Isi template file TXT Worklist
 	txtContent := fmt.Sprintf(`(0010,0010) PN [%s]
 (0010,0020) LO [%s]
 (0008,0050) SH [%s]
 (0008,0060) CS [%s]
 (0032,1060) LO [%s]
 (0040,0100) SQ
-  (0040,0001) AE [%s]
-  (0040,0002) DA [%s]
-  (0040,0003) TM [%s]
-  (0040,0006) PN [%s]
-  (0040,0007) LO [%s]
-  (0040,0009) SH [%s]
-  (0040,0010) SH [%s]
-  (0040,0020) CS [SCHEDULED]
+  (fffe,e000) na
+    (0040,0001) AE [%s]
+    (0040,0002) DA [%s]
+    (0040,0003) TM [%s]
+    (0040,0006) PN [%s]
+    (0040,0007) LO [%s]
+    (0040,0009) SH [%s]
+    (0040,0010) SH [%s]
+    (0040,0020) CS [SCHEDULED]
+  (fffe,e00d) na
+(fffe,e0dd) na
 `,
 		wl.PatientName,
 		wl.PatientID,
@@ -64,19 +66,19 @@ func SendWorklistToOrthanc(cfg Config, wl WorklistRequest) error {
 		wl.ScheduledStationName,
 	)
 
-	// Simpan file .txt
+	// Simpan file txt
 	if err := os.WriteFile(txtPath, []byte(txtContent), 0644); err != nil {
 		return fmt.Errorf("gagal menyimpan file TXT DICOM: %v", err)
 	}
 
-	// Jalankan dump2dcm untuk membuat file .wl
+	// Konversi dengan dump2dcm
 	cmd := exec.Command("dump2dcm", txtPath, wlPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("gagal menjalankan dump2dcm: %v\n%s", err, string(output))
 	}
 
-	fmt.Printf("✅ Worklist berhasil dibuat: %s\n", wlPath)
+	log.Printf("✅ Worklist berhasil dibuat: %s", wlPath)
 	return nil
 }
 
