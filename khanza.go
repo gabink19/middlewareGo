@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"log"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -31,6 +32,12 @@ func ConnectKhanzaDB(cfg Config) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Tambahkan pengaturan pool berikut:
+	db.SetMaxIdleConns(5)
+	db.SetMaxOpenConns(20)
+	db.SetConnMaxLifetime(60 * time.Minute) // koneksi akan di-refresh setiap 60 menit
+	db.SetConnMaxIdleTime(5 * time.Minute)  // idle lebih dari 5 menit akan ditutup
+
 	if err := db.Ping(); err != nil {
 		return nil, err
 	}

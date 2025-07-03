@@ -26,6 +26,12 @@ func ConnectMiddlewareDB(cfg Config) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Pengaturan pool koneksi
+	db.SetMaxIdleConns(5)
+	db.SetMaxOpenConns(20)
+	db.SetConnMaxLifetime(60 * time.Minute)
+	db.SetConnMaxIdleTime(5 * time.Minute)
+
 	if err := db.Ping(); err != nil {
 		return nil, err
 	}
