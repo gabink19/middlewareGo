@@ -232,6 +232,7 @@ func main() {
 	go processWorklist(cfg, db, mwdb)
 
 	http.HandleFunc("/webhook", func(w http.ResponseWriter, r *http.Request) {
+		log.Println("webhook SR diterima....")
 		processSRWebhook(cfg, db, mwdb, w, r)
 	})
 
