@@ -123,12 +123,14 @@ func processSRWebhook(cfg Config, db, mwdb *sql.DB, w http.ResponseWriter, r *ht
 	}
 
 	var payload struct {
-		Accession        string `json:"accession"`
-		Link             string `json:"link"`
-		PatientID        string `json:"patient_id"`
-		PatientName      string `json:"patient_name"`
-		StudyInstanceUID string `json:"study"`
+		Accession        string      `json:"accession"`
+		Link             string      `json:"link"`
+		PatientIDINT     interface{} `json:"patient_id"`
+		PatientID        string      `json:""`
+		PatientName      string      `json:"patient_name"`
+		StudyInstanceUID string      `json:"study"`
 	}
+
 	bodyBytes, _ := io.ReadAll(r.Body)
 	log.Printf("Menerima webhook r.Body: %s", string(bodyBytes))
 	if err := json.Unmarshal(bodyBytes, &payload); err != nil {
@@ -137,7 +139,12 @@ func processSRWebhook(cfg Config, db, mwdb *sql.DB, w http.ResponseWriter, r *ht
 		return
 	}
 	SavePortalLog(mwdb, "[SR] Webhook SR diterima dari Orthanc: "+payload.StudyInstanceUID)
-
+	switch v := payload.PatientIDINT.(type) {
+	case string:
+		payload.PatientID = v
+	case float64:
+		payload.PatientID = fmt.Sprintf("%.0f", v) // tanpa desimal
+	}
 	// Proses SR hanya untuk StudyInstanceUID yang dikirim
 	// link := GenerateOHIFLink(cfg, payload.StudyInstanceUID)
 	// if err := SaveStudyLinkToKhanza(db, payload.PatientID, link); err != nil {
