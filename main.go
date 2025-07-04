@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -116,10 +117,10 @@ func processSRDetection(cfg Config, db, mwdb *sql.DB) {
 }
 
 func processSRWebhook(cfg Config, db, mwdb *sql.DB, w http.ResponseWriter, r *http.Request) {
-	// if r.Method != http.MethodPost {
-	// 	http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-	// 	return
-	// }
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
 	var payload struct {
 		Accession        string      `json:"accession"`
@@ -130,9 +131,9 @@ func processSRWebhook(cfg Config, db, mwdb *sql.DB, w http.ResponseWriter, r *ht
 		StudyInstanceUID string      `json:"study"`
 	}
 
-	bodyBytes := `{"accession":"PR202507010002","link":"http://127.0.0.1:8042/web-viewer/app/explorer.html?study=1.2.826.0.1.3680043.8.498.98057307130083448978189897962673323639","patient_id":108843,"patient_name":"KOMARUDIN","study":"1.2.826.0.1.3680043.8.498.98057307130083448978189897962673323639"}`
+	bodyBytes, _ := io.ReadAll(r.Body)
 	log.Printf("Menerima webhook r.Body: %s", string(bodyBytes))
-	if err := json.Unmarshal([]byte(bodyBytes), &payload); err != nil {
+	if err := json.Unmarshal(bodyBytes, &payload); err != nil {
 		http.Error(w, "Invalid JSON payload : "+err.Error(), http.StatusBadRequest)
 		SavePortalLog(mwdb, "[SR] Webhook gagal: payload tidak valid")
 		return
@@ -248,7 +249,7 @@ func main() {
 
 	http.HandleFunc("/webhook", func(w http.ResponseWriter, r *http.Request) {
 		log.Println("webhook SR diterima....")
-		processSRWebhook(cfg, db, mwdb, w, r)
+		go processSRWebhook(cfg, db, mwdb, w, r)
 	})
 
 	for {
