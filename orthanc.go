@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -117,28 +116,23 @@ func GetNewStudiesFromOrthanc(cfg Config) ([]OrthancStudy, error) {
 	return studies, nil
 }
 
-func ParseSRContentFromOrthanc(cfg Config, instanceID string) (interface{}, error) {
+// Parsing isi Structured Report (SR) dari Orthanc
+func ParseSRContentFromOrthanc(cfg Config, instanceID string) (map[string]interface{}, error) {
+	// instanceID adalah ID instance DICOM SR
 	url := cfg.OrthancURL + "/instances/" + instanceID + "/content"
+	log.Println("Fetching SR content from:", url)
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-
-	// Coba decode ke array
-	var arr []map[string]interface{}
-	if err := json.Unmarshal(body, &arr); err == nil && len(arr) > 0 {
-		return arr[0], nil // Ambil elemen pertama
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("Orthanc error: %s", resp.Status)
 	}
-
-	// Jika gagal, coba decode ke map
-	var obj map[string]interface{}
-	if err := json.Unmarshal(body, &obj); err == nil {
-		return obj, nil
+	log.Println("Response Data Series SR:", resp.Status)
+	var srContent map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&srContent); err != nil {
+		return nil, err
 	}
-
-	// Jika semua gagal, return error dan tampilkan isi body
-	return nil, fmt.Errorf("SR content tidak bisa di-unmarshal: %s", string(body))
+	return srContent, nil
 }
