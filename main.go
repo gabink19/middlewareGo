@@ -116,82 +116,86 @@ func processSRDetection(cfg Config, db, mwdb *sql.DB) {
 }
 
 func processSRWebhook(cfg Config, db, mwdb *sql.DB, w http.ResponseWriter, r *http.Request) {
-	// Webhook Orthanc Lua biasanya mengirim JSON POST berisi StudyInstanceUID, PatientID, dsb
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	var payload struct {
-		StudyInstanceUID string `json:"StudyInstanceUID"`
-		PatientID        string `json:"PatientID"`
+		Accession        string `json:"accession"`
+		Link             string `json:"link"`
+		PatientID        string `json:"patient_id"`
+		PatientName      string `json:"patient_name"`
+		StudyInstanceUID string `json:"study"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Invalid JSON payload"))
+		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		SavePortalLog(mwdb, "[SR] Webhook gagal: payload tidak valid")
 		return
 	}
 	SavePortalLog(mwdb, "[SR] Webhook SR diterima dari Orthanc: "+payload.StudyInstanceUID)
 
 	// Proses SR hanya untuk StudyInstanceUID yang dikirim
-	link := GenerateOHIFLink(cfg, payload.StudyInstanceUID)
-	if err := SaveStudyLinkToKhanza(db, payload.PatientID, link); err != nil {
-		log.Printf("Gagal update link hasil SR ke Khanza untuk %s: %v", payload.PatientID, err)
-		SavePortalLog(mwdb, "[SR] Gagal update link hasil SR ke Khanza untuk "+payload.PatientID+": "+err.Error())
-	} else {
-		log.Printf("Link hasil SR %s disimpan ke Khanza", payload.PatientID)
-		SavePortalLog(mwdb, "[SR] Link hasil SR "+payload.PatientID+" disimpan ke Khanza")
-	}
+	// link := GenerateOHIFLink(cfg, payload.StudyInstanceUID)
+	// if err := SaveStudyLinkToKhanza(db, payload.PatientID, link); err != nil {
+	// 	log.Printf("Gagal update link hasil SR ke Khanza untuk %s: %v", payload.PatientID, err)
+	// 	SavePortalLog(mwdb, "[SR] Gagal update link hasil SR ke Khanza untuk "+payload.PatientID+": "+err.Error())
+	// 	http.Error(w, "Gagal update link hasil SR ke Khanza", http.StatusInternalServerError)
+	// 	return
+	// }
+	// log.Printf("Link hasil SR %s disimpan ke Khanza", payload.PatientID)
+	// SavePortalLog(mwdb, "[SR] Link hasil SR "+payload.PatientID+" disimpan ke Khanza")
 
 	seriesURL := cfg.OrthancURL + "/studies/" + payload.StudyInstanceUID + "/series"
 	resp, err := http.Get(seriesURL)
 	if err != nil {
 		SavePortalLog(mwdb, "[SR] Gagal ambil series SR: "+err.Error())
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Gagal ambil series SR"))
+		http.Error(w, "Gagal ambil series SR", http.StatusInternalServerError)
 		return
 	}
+	defer resp.Body.Close()
+
 	var seriesIDs []string
 	if err := json.NewDecoder(resp.Body).Decode(&seriesIDs); err != nil {
-		resp.Body.Close()
 		SavePortalLog(mwdb, "[SR] Gagal decode series SR: "+err.Error())
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Gagal decode series SR"))
+		http.Error(w, "Gagal decode series SR", http.StatusInternalServerError)
 		return
 	}
-	resp.Body.Close()
 	if len(seriesIDs) == 0 {
 		SavePortalLog(mwdb, "[SR] Tidak ada series SR ditemukan")
-		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("Tidak ada series SR ditemukan"))
+		http.Error(w, "Tidak ada series SR ditemukan", http.StatusNotFound)
 		return
 	}
+
 	instancesURL := cfg.OrthancURL + "/series/" + seriesIDs[0] + "/instances"
 	resp2, err := http.Get(instancesURL)
 	if err != nil {
 		SavePortalLog(mwdb, "[SR] Gagal ambil instance SR: "+err.Error())
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Gagal ambil instance SR"))
+		http.Error(w, "Gagal ambil instance SR", http.StatusInternalServerError)
 		return
 	}
+	defer resp2.Body.Close()
+
 	var instanceIDs []string
 	if err := json.NewDecoder(resp2.Body).Decode(&instanceIDs); err != nil {
-		resp2.Body.Close()
 		SavePortalLog(mwdb, "[SR] Gagal decode instance SR: "+err.Error())
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Gagal decode instance SR"))
+		http.Error(w, "Gagal decode instance SR", http.StatusInternalServerError)
 		return
 	}
-	resp2.Body.Close()
 	if len(instanceIDs) == 0 {
 		SavePortalLog(mwdb, "[SR] Tidak ada instance SR ditemukan")
-		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("Tidak ada instance SR ditemukan"))
+		http.Error(w, "Tidak ada instance SR ditemukan", http.StatusNotFound)
 		return
 	}
+
 	SavePortalLog(mwdb, "[SR] Parsing isi SR instance: "+instanceIDs[0])
 	srContent, err := ParseSRContentFromOrthanc(cfg, instanceIDs[0])
 	if err != nil {
 		SavePortalLog(mwdb, "[SR] Gagal parsing isi SR: "+err.Error())
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Gagal parsing isi SR"))
+		http.Error(w, "Gagal parsing isi SR", http.StatusInternalServerError)
 		return
 	}
+
 	hasilJSON, _ := json.MarshalIndent(srContent, "", "  ")
 	tglPeriksa := time.Now().Format("2006-01-02")
 	jam := time.Now().Format("15:04:05")
@@ -199,15 +203,15 @@ func processSRWebhook(cfg Config, db, mwdb *sql.DB, w http.ResponseWriter, r *ht
 	if err := SaveRadiologyResult(db, payload.PatientID, tglPeriksa, jam, string(hasilJSON), petugas); err != nil {
 		log.Printf("Gagal simpan hasil SR ke Khanza untuk %s: %v", payload.PatientID, err)
 		SavePortalLog(mwdb, "[SR] Gagal simpan hasil SR ke Khanza untuk "+payload.PatientID+": "+err.Error())
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Gagal simpan hasil SR ke Khanza"))
+		http.Error(w, "Gagal simpan hasil SR ke Khanza", http.StatusInternalServerError)
 		return
-	} else {
-		log.Printf("Hasil SR %s disimpan ke Khanza", payload.PatientID)
-		SavePortalLog(mwdb, "[SR] Hasil SR "+payload.PatientID+" disimpan ke Khanza")
-		UpdateHasilOrthanc(db, payload.PatientID, payload.StudyInstanceUID)
 	}
-	w.Write([]byte("SR detection processed (webhook lua orthanc)"))
+	log.Printf("Hasil SR %s disimpan ke Khanza", payload.PatientID)
+	SavePortalLog(mwdb, "[SR] Hasil SR "+payload.PatientID+" disimpan ke Khanza")
+	UpdateHasilOrthanc(db, payload.PatientID, payload.StudyInstanceUID)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"status":"ok","message":"SR detection processed (webhook lua orthanc)"}`))
 }
 
 func main() {
