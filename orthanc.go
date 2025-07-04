@@ -118,7 +118,7 @@ func GetNewStudiesFromOrthanc(cfg Config) ([]OrthancStudy, error) {
 }
 
 // Parsing isi Structured Report (SR) dari Orthanc
-func ParseSRContentFromOrthanc(cfg Config, instanceID string) (map[string]interface{}, error) {
+func ParseSRContentFromOrthanc(cfg Config, instanceID string) ([]string, error) {
 	// instanceID adalah ID instance DICOM SR
 	url := cfg.OrthancURL + "/instances/" + instanceID + "/content"
 	log.Println("Fetching SR content from:", url)
@@ -131,7 +131,7 @@ func ParseSRContentFromOrthanc(cfg Config, instanceID string) (map[string]interf
 		return nil, fmt.Errorf("Orthanc error: %s", resp.Status)
 	}
 	log.Println("Response Data Series SR:", resp.Status)
-	var srContent map[string]interface{}
+	var srContent []string
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	if err := json.Unmarshal(bodyBytes, &srContent); err != nil {
 		log.Printf("Gagal decode SR content: %v", err)
