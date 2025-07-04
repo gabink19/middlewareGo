@@ -129,6 +129,7 @@ func processSRWebhook(cfg Config, db, mwdb *sql.DB, bodyBytes []byte) {
 	}
 
 	hasilJSON, _ := json.MarshalIndent(srContent, "", "  ")
+	log.Printf("Parsed SR content untuk %s: %s", payload.PatientID, string(hasilJSON))
 	tglPeriksa := time.Now().Format("2006-01-02")
 	jam := time.Now().Format("15:04:05")
 	petugas := "SYSTEM"
