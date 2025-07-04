@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -131,8 +132,10 @@ func ParseSRContentFromOrthanc(cfg Config, instanceID string) (map[string]interf
 	}
 	log.Println("Response Data Series SR:", resp.Status)
 	var srContent map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&srContent); err != nil {
-		return nil, err
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	if err := json.Unmarshal(bodyBytes, &srContent); err != nil {
+		log.Printf("Gagal decode SR content: %v", err)
+		return nil, fmt.Errorf("invalid JSON payload: %v", err)
 	}
 	return srContent, nil
 }
