@@ -116,12 +116,7 @@ func processSRDetection(cfg Config, db, mwdb *sql.DB) {
 	}
 }
 
-func processSRWebhook(cfg Config, db, mwdb *sql.DB, w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
+func processSRWebhook(cfg Config, db, mwdb *sql.DB, bodyBytes []byte) {
 	var payload struct {
 		Accession        string      `json:"accession"`
 		Link             string      `json:"link"`
@@ -131,10 +126,8 @@ func processSRWebhook(cfg Config, db, mwdb *sql.DB, w http.ResponseWriter, r *ht
 		StudyInstanceUID string      `json:"study"`
 	}
 
-	bodyBytes, _ := io.ReadAll(r.Body)
-	log.Printf("Menerima webhook r.Body: %s", string(bodyBytes))
 	if err := json.Unmarshal(bodyBytes, &payload); err != nil {
-		http.Error(w, "Invalid JSON payload : "+err.Error(), http.StatusBadRequest)
+		log.Printf("Invalid JSON payload : %v", err)
 		SavePortalLog(mwdb, "[SR] Webhook gagal: payload tidak valid")
 		return
 	}
@@ -145,22 +138,12 @@ func processSRWebhook(cfg Config, db, mwdb *sql.DB, w http.ResponseWriter, r *ht
 	case float64:
 		payload.PatientID = fmt.Sprintf("%.0f", v) // tanpa desimal
 	}
-	// Proses SR hanya untuk StudyInstanceUID yang dikirim
-	// link := GenerateOHIFLink(cfg, payload.StudyInstanceUID)
-	// if err := SaveStudyLinkToKhanza(db, payload.PatientID, link); err != nil {
-	// 	log.Printf("Gagal update link hasil SR ke Khanza untuk %s: %v", payload.PatientID, err)
-	// 	SavePortalLog(mwdb, "[SR] Gagal update link hasil SR ke Khanza untuk "+payload.PatientID+": "+err.Error())
-	// 	http.Error(w, "Gagal update link hasil SR ke Khanza", http.StatusInternalServerError)
-	// 	return
-	// }
-	// log.Printf("Link hasil SR %s disimpan ke Khanza", payload.PatientID)
-	// SavePortalLog(mwdb, "[SR] Link hasil SR "+payload.PatientID+" disimpan ke Khanza")
 
 	seriesURL := cfg.OrthancURL + "/studies/" + payload.StudyInstanceUID + "/series"
 	resp, err := http.Get(seriesURL)
 	if err != nil {
 		SavePortalLog(mwdb, "[SR] Gagal ambil series SR: "+err.Error())
-		http.Error(w, "Gagal ambil series SR", http.StatusInternalServerError)
+		log.Printf("Gagal ambil series SR: %v", err)
 		return
 	}
 	log.Println("Response Data Series SR:", resp.Status)
@@ -169,12 +152,12 @@ func processSRWebhook(cfg Config, db, mwdb *sql.DB, w http.ResponseWriter, r *ht
 	var seriesIDs []string
 	if err := json.NewDecoder(resp.Body).Decode(&seriesIDs); err != nil {
 		SavePortalLog(mwdb, "[SR] Gagal decode series SR: "+err.Error())
-		http.Error(w, "Gagal decode series SR", http.StatusInternalServerError)
+		log.Printf("Gagal decode series SR: %v", err)
 		return
 	}
 	if len(seriesIDs) == 0 {
 		SavePortalLog(mwdb, "[SR] Tidak ada series SR ditemukan")
-		http.Error(w, "Tidak ada series SR ditemukan", http.StatusNotFound)
+		log.Printf("Tidak ada series SR ditemukan")
 		return
 	}
 
@@ -182,7 +165,7 @@ func processSRWebhook(cfg Config, db, mwdb *sql.DB, w http.ResponseWriter, r *ht
 	resp2, err := http.Get(instancesURL)
 	if err != nil {
 		SavePortalLog(mwdb, "[SR] Gagal ambil instance SR: "+err.Error())
-		http.Error(w, "Gagal ambil instance SR", http.StatusInternalServerError)
+		log.Printf("Gagal ambil instance SR: %v", err)
 		return
 	}
 	log.Println("Response Data resp2:", resp2.Status)
@@ -191,12 +174,12 @@ func processSRWebhook(cfg Config, db, mwdb *sql.DB, w http.ResponseWriter, r *ht
 	var instanceIDs []string
 	if err := json.NewDecoder(resp2.Body).Decode(&instanceIDs); err != nil {
 		SavePortalLog(mwdb, "[SR] Gagal decode instance SR: "+err.Error())
-		http.Error(w, "Gagal decode instance SR", http.StatusInternalServerError)
+		log.Printf("Gagal decode instance SR: %v", err)
 		return
 	}
 	if len(instanceIDs) == 0 {
 		SavePortalLog(mwdb, "[SR] Tidak ada instance SR ditemukan")
-		http.Error(w, "Tidak ada instance SR ditemukan", http.StatusNotFound)
+		log.Printf("Tidak ada instance SR ditemukan")
 		return
 	}
 
@@ -204,7 +187,7 @@ func processSRWebhook(cfg Config, db, mwdb *sql.DB, w http.ResponseWriter, r *ht
 	srContent, err := ParseSRContentFromOrthanc(cfg, instanceIDs[0])
 	if err != nil {
 		SavePortalLog(mwdb, "[SR] Gagal parsing isi SR: "+err.Error())
-		http.Error(w, "Gagal parsing isi SR", http.StatusInternalServerError)
+		log.Printf("Gagal parsing isi SR: %v", err)
 		return
 	}
 
@@ -215,15 +198,11 @@ func processSRWebhook(cfg Config, db, mwdb *sql.DB, w http.ResponseWriter, r *ht
 	if err := SaveRadiologyResult(db, payload.PatientID, tglPeriksa, jam, string(hasilJSON), petugas); err != nil {
 		log.Printf("Gagal simpan hasil SR ke Khanza untuk %s: %v", payload.PatientID, err)
 		SavePortalLog(mwdb, "[SR] Gagal simpan hasil SR ke Khanza untuk "+payload.PatientID+": "+err.Error())
-		http.Error(w, "Gagal simpan hasil SR ke Khanza", http.StatusInternalServerError)
 		return
 	}
 	log.Printf("Hasil SR %s disimpan ke Khanza", payload.PatientID)
 	SavePortalLog(mwdb, "[SR] Hasil SR "+payload.PatientID+" disimpan ke Khanza")
 	UpdateHasilOrthanc(db, payload.PatientID, payload.StudyInstanceUID)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"status":"ok","message":"SR detection processed (webhook lua orthanc)"}`))
 }
 
 func main() {
@@ -249,7 +228,13 @@ func main() {
 
 	http.HandleFunc("/webhook", func(w http.ResponseWriter, r *http.Request) {
 		log.Println("webhook SR diterima....")
-		go processSRWebhook(cfg, db, mwdb, w, r)
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		bodyBytes, _ := io.ReadAll(r.Body)
+		log.Printf("Menerima webhook r.Body: %s", string(bodyBytes))
+		go processSRWebhook(cfg, db, mwdb, bodyBytes)
 	})
 
 	for {
