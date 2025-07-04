@@ -125,22 +125,20 @@ func ParseSRContentFromOrthanc(cfg Config, instanceID string) (interface{}, erro
 	}
 	defer resp.Body.Close()
 
+	body, _ := io.ReadAll(resp.Body)
+
 	// Coba decode ke array
 	var arr []map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&arr); err == nil {
-		if len(arr) > 0 {
-			return arr[0], nil // Ambil elemen pertama
-		}
-		return nil, fmt.Errorf("SR content array kosong")
+	if err := json.Unmarshal(body, &arr); err == nil && len(arr) > 0 {
+		return arr[0], nil // Ambil elemen pertama
 	}
 
 	// Jika gagal, coba decode ke map
 	var obj map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&obj); err == nil {
+	if err := json.Unmarshal(body, &obj); err == nil {
 		return obj, nil
 	}
 
-	// Jika semua gagal, return error
-	body, _ := io.ReadAll(resp.Body)
+	// Jika semua gagal, return error dan tampilkan isi body
 	return nil, fmt.Errorf("SR content tidak bisa di-unmarshal: %s", string(body))
 }
