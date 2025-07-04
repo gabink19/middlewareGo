@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -116,98 +117,30 @@ func GetNewStudiesFromOrthanc(cfg Config) ([]OrthancStudy, error) {
 	return studies, nil
 }
 
-// Deteksi study yang memiliki hasil DICOM SR dari Orthanc
-func DetectSRStudiesFromOrthanc(cfg Config) ([]OrthancStudy, error) {
-	url := cfg.OrthancURL + "/studies"
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("Orthanc error: %s", resp.Status)
-	}
-	var studyIDs []string
-	if err := json.NewDecoder(resp.Body).Decode(&studyIDs); err != nil {
-		return nil, err
-	}
-	var srStudies []OrthancStudy
-	for _, id := range studyIDs {
-		seriesURL := cfg.OrthancURL + "/studies/" + id + "/series"
-		resp2, err := http.Get(seriesURL)
-		if err != nil {
-			continue
-		}
-		if resp2.StatusCode != 200 {
-			resp2.Body.Close()
-			continue
-		}
-		var seriesIDs []string
-		if err := json.NewDecoder(resp2.Body).Decode(&seriesIDs); err != nil {
-			resp2.Body.Close()
-			continue
-		}
-		resp2.Body.Close()
-		for _, sid := range seriesIDs {
-			seriesInfoURL := cfg.OrthancURL + "/series/" + sid
-			resp3, err := http.Get(seriesInfoURL)
-			if err != nil {
-				continue
-			}
-			if resp3.StatusCode != 200 {
-				resp3.Body.Close()
-				continue
-			}
-			var seriesInfo struct {
-				MainDicomTags struct {
-					Modality string `json:"Modality"`
-				} `json:"MainDicomTags"`
-			}
-			if err := json.NewDecoder(resp3.Body).Decode(&seriesInfo); err != nil {
-				resp3.Body.Close()
-				continue
-			}
-			resp3.Body.Close()
-			if seriesInfo.MainDicomTags.Modality == "SR" {
-				// Ambil info study
-				studyURL := cfg.OrthancURL + "/studies/" + id
-				resp4, err := http.Get(studyURL)
-				if err != nil {
-					continue
-				}
-				if resp4.StatusCode != 200 {
-					resp4.Body.Close()
-					continue
-				}
-				var study OrthancStudy
-				if err := json.NewDecoder(resp4.Body).Decode(&study); err != nil {
-					resp4.Body.Close()
-					continue
-				}
-				resp4.Body.Close()
-				srStudies = append(srStudies, study)
-				break // satu SR cukup
-			}
-		}
-	}
-	return srStudies, nil
-}
-
-// Parsing isi Structured Report (SR) dari Orthanc
-func ParseSRContentFromOrthanc(cfg Config, instanceID string) (map[string]interface{}, error) {
-	// instanceID adalah ID instance DICOM SR
+func ParseSRContentFromOrthanc(cfg Config, instanceID string) (interface{}, error) {
 	url := cfg.OrthancURL + "/instances/" + instanceID + "/content"
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("Orthanc error: %s", resp.Status)
+
+	// Coba decode ke array
+	var arr []map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&arr); err == nil {
+		if len(arr) > 0 {
+			return arr[0], nil // Ambil elemen pertama
+		}
+		return nil, fmt.Errorf("SR content array kosong")
 	}
-	var srContent map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&srContent); err != nil {
-		return nil, err
+
+	// Jika gagal, coba decode ke map
+	var obj map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&obj); err == nil {
+		return obj, nil
 	}
-	return srContent, nil
+
+	// Jika semua gagal, return error
+	body, _ := io.ReadAll(resp.Body)
+	return nil, fmt.Errorf("SR content tidak bisa di-unmarshal: %s", string(body))
 }
