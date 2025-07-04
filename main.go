@@ -129,9 +129,9 @@ func processSRWebhook(cfg Config, db, mwdb *sql.DB, w http.ResponseWriter, r *ht
 		PatientName      string `json:"patient_name"`
 		StudyInstanceUID string `json:"study"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		bodyBytes, _ := io.ReadAll(r.Body)
-		log.Printf("Menerima webhook r.Body: %s", string(bodyBytes))
+	bodyBytes, _ := io.ReadAll(r.Body)
+	log.Printf("Menerima webhook r.Body: %s", string(bodyBytes))
+	if err := json.Unmarshal(bodyBytes, payload); err != nil {
 		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
 		SavePortalLog(mwdb, "[SR] Webhook gagal: payload tidak valid")
 		return
