@@ -24,6 +24,7 @@ type WorklistRequest struct {
 	ScheduledStationName              string
 	ScheduledProcedureStepDescription string
 	ScheduledPerformingPhysicianName  string
+	KdJenisPrw                        string
 }
 
 func ConnectKhanzaDB(cfg Config) (*sql.DB, error) {
@@ -142,7 +143,8 @@ func GetPendingWorklist(db *sql.DB, tglPermintaan string) ([]WorklistRequest, er
     WHEN UPPER(nm_perawatan) LIKE '%HSG%' OR UPPER(nm_perawatan) LIKE '%CHARGER CHATETER HSG%' THEN 'CR'
     -- Default mapping jika tidak terdeteksi
     ELSE 'CR'
-    END AS Modality
+    END AS Modality,
+	pj.kd_jenis_prw as KdJenisPrw
 FROM
     permintaan_radiologi pr
 JOIN
@@ -212,5 +214,73 @@ func SaveRadiologyResult(db *sql.DB, noorder, tglPeriksa, jam, hasil string) err
 		"INSERT INTO hasil_radiologi (no_rawat, tgl_periksa, jam, hasil) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE hasil=?, no_rawat=?",
 		noRawat, tglPeriksa, jam, hasil, hasil, noRawat,
 	)
+	return err
+}
+
+func InsertPermintaanPemeriksaanRadiologi(db *sql.DB, noorder, kdJenisPrw, status string) error {
+	// Cek apakah sudah ada data dengan noorder dan kd_jenis_prw yang sama
+	var count int
+	err := db.QueryRow(
+		`SELECT COUNT(*) FROM permintaan_pemeriksaan_radiologi WHERE noorder = ? AND kd_jenis_prw = ?`,
+		noorder, kdJenisPrw,
+	).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		// Sudah ada, tidak perlu insert lagi
+		return nil
+	}
+
+	// Insert data baru
+	_, err = db.Exec(
+		`INSERT INTO permintaan_pemeriksaan_radiologi (noorder, kd_jenis_prw, status) VALUES (?, ?, ?)`,
+		noorder, kdJenisPrw, status,
+	)
+	InsertPeriksaRadiologiFromPermintaan(db, noorder)
+
+	return err
+}
+
+func InsertPeriksaRadiologiFromPermintaan(db *sql.DB, noorder string) error {
+	// Ambil data dari relasi tabel yang diperlukan
+	var (
+		noRawat, tglPeriksa, jam, kdDokter, nipPetugas, kdJenisPrw, hasil, biaya, status, kdBagian, nipPerujuk, kdPenjab string
+	)
+	query := `
+SELECT
+    pr.no_rawat,
+    pr.tgl_permintaan,
+    pr.jam_permintaan,
+    pr.kd_dokter_perujuk,
+    pr.nip_petugas,
+    pj.kd_jenis_prw,
+    IFNULL(hr.hasil, '') AS hasil,
+    IFNULL(jpr.total_byr, 0) AS biaya,
+    pr.status,
+    IFNULL(pr.kd_bagian_radiologi, '') AS kd_bagian,
+    IFNULL(pr.nip_perujuk, '') AS nip_perujuk,
+    IFNULL(r.kd_pj, '') AS kd_penjab
+FROM permintaan_radiologi pr
+LEFT JOIN permintaan_pemeriksaan_radiologi pj ON pj.noorder = pr.noorder
+LEFT JOIN hasil_radiologi hr ON hr.no_rawat = pr.no_rawat
+LEFT JOIN jns_perawatan_radiologi jpr ON pj.kd_jenis_prw = jpr.kd_jenis_prw
+LEFT JOIN reg_periksa r ON pr.no_rawat = r.no_rawat
+WHERE pr.noorder = ?
+LIMIT 1
+`
+	err := db.QueryRow(query, noorder).Scan(
+		&noRawat, &tglPeriksa, &jam, &kdDokter, &nipPetugas, &kdJenisPrw, &hasil, &biaya, &status, &kdBagian, &nipPerujuk, &kdPenjab,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Insert ke tabel periksa_radiologi
+	_, err = db.Exec(`
+INSERT INTO periksa_radiologi (
+    no_rawat, tgl_periksa, jam, kd_dokter, nip, kd_jenis_prw, hasil, biaya, status, kd_bagian_radiologi, nip_perujuk, kd_pj
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`, noRawat, tglPeriksa, jam, kdDokter, nipPetugas, kdJenisPrw, hasil, biaya, status, kdBagian, nipPerujuk, kdPenjab)
 	return err
 }

@@ -27,9 +27,15 @@ func processWorklist(cfg Config, db, mwdb *sql.DB) {
 			if IsWorklistSent(mwdb, wl.AccessionNumber) {
 				continue
 			}
+			err := InsertPermintaanPemeriksaanRadiologi(db, wl.PatientID, wl.KdJenisPrw, "Belum")
+			if err != nil {
+				log.Printf("Gagal insert permintaan pemeriksaan radiologi: %v", err)
+				SavePortalLog(mwdb, "[Worklist] Gagal insert permintaan pemeriksaan radiologi untuk "+wl.AccessionNumber+": "+err.Error())
+				continue
+			}
 			SavePortalLog(mwdb, "[Worklist] Proses kirim worklist "+wl.AccessionNumber)
 			marsh, _ := json.Marshal(wl)
-			err := SendWorklistToOrthanc(cfg, wl)
+			err = SendWorklistToOrthanc(cfg, wl)
 			if err != nil {
 				log.Printf("Gagal kirim worklist ke Orthanc untuk %s: %v", wl.AccessionNumber, err)
 				SavePortalLog(mwdb, "[Worklist] Gagal kirim worklist ke Orthanc untuk "+wl.AccessionNumber+": "+err.Error())
