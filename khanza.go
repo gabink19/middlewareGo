@@ -237,7 +237,6 @@ func InsertPermintaanPemeriksaanRadiologi(db *sql.DB, noorder, kdJenisPrw, statu
 		`INSERT INTO permintaan_pemeriksaan_radiologi (noorder, kd_jenis_prw, status) VALUES (?, ?, ?)`,
 		noorder, kdJenisPrw, status,
 	)
-	InsertPeriksaRadiologiFromPermintaan(db, noorder)
 
 	return err
 }

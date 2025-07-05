@@ -142,6 +142,7 @@ func processSRWebhook(cfg Config, db, mwdb *sql.DB, bodyBytes []byte) {
 		SavePortalLog(mwdb, "[SR] Gagal simpan hasil SR ke Khanza untuk "+payload.PatientID+": "+err.Error())
 		return
 	}
+	InsertPeriksaRadiologiFromPermintaan(db, payload.PatientID)
 	log.Printf("Hasil SR %s disimpan ke Khanza", payload.PatientID)
 	SavePortalLog(mwdb, "[SR] Hasil SR "+payload.PatientID+" disimpan ke Khanza")
 	UpdateHasilOrthanc(mwdb, payload.PatientID, string(hasilJSON))
