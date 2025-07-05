@@ -179,6 +179,7 @@ WHERE
 			&req.ScheduledProcedureStepStartDate,
 			&req.ScheduledProcedureStepStartTime,
 			&req.Modality,
+			&req.KdJenisPrw,
 		)
 		if err != nil {
 			log.Println("Error scan:", err)
