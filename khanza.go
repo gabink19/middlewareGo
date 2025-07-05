@@ -62,23 +62,87 @@ func GetPendingWorklist(db *sql.DB, tglPermintaan string) ([]WorklistRequest, er
     DATE_FORMAT(pr.tgl_permintaan, '%Y%m%d') AS ScheduledProcedureStepStartDate,
     REPLACE(pr.jam_permintaan, ':', '') AS ScheduledProcedureStepStartTime,
 	CASE
-    WHEN jpr.nm_perawatan LIKE '%CR%' OR jpr.nm_perawatan LIKE '%Rontgen%' OR jpr.nm_perawatan LIKE '%Computed Radiography%' THEN 'CR'
-    WHEN jpr.nm_perawatan LIKE '%CT%' OR jpr.nm_perawatan LIKE '%CT Scan%' THEN 'CT'
-    WHEN jpr.nm_perawatan LIKE '%DX%' OR jpr.nm_perawatan LIKE '%General Radiography%' THEN 'DX'
-    WHEN jpr.nm_perawatan LIKE '%ECG%' OR jpr.nm_perawatan LIKE '%Elektrokardiogram%' OR jpr.nm_perawatan LIKE '%Electrocardiogram%' THEN 'ECG'
-    WHEN jpr.nm_perawatan LIKE '%EPS%' OR jpr.nm_perawatan LIKE '%Electrophysiology%' THEN 'EPS'
-    WHEN jpr.nm_perawatan LIKE '%ES%' OR jpr.nm_perawatan LIKE '%Endoscopy%' THEN 'ES'
-    WHEN jpr.nm_perawatan LIKE '%MG%' OR jpr.nm_perawatan LIKE '%Mammo%' OR jpr.nm_perawatan LIKE '%Mammografi%' OR jpr.nm_perawatan LIKE '%Mammography%' THEN 'MG'
-    WHEN jpr.nm_perawatan LIKE '%MR%' OR jpr.nm_perawatan LIKE '%MRI%' OR jpr.nm_perawatan LIKE '%Magnetic Resonance%' THEN 'MR'
-    WHEN jpr.nm_perawatan LIKE '%NM%' OR jpr.nm_perawatan LIKE '%Nuklir%' OR jpr.nm_perawatan LIKE '%Nuclear Medicine%' THEN 'NM'
-    WHEN jpr.nm_perawatan LIKE '%OT%' OR jpr.nm_perawatan LIKE '%Other%' OR jpr.nm_perawatan LIKE '%Lain%' THEN 'OT'
-    WHEN jpr.nm_perawatan LIKE '%PT%' OR jpr.nm_perawatan LIKE '%PET%' OR jpr.nm_perawatan LIKE '%Positron%' THEN 'PT'
-    WHEN jpr.nm_perawatan LIKE '%SC%' OR jpr.nm_perawatan LIKE '%Scan Sekunder%' OR jpr.nm_perawatan LIKE '%Secondary Capture%' THEN 'SC'
-    WHEN jpr.nm_perawatan LIKE '%SR%' OR jpr.nm_perawatan LIKE '%Structured%' THEN 'SR'
-    WHEN jpr.nm_perawatan LIKE '%US%' OR jpr.nm_perawatan LIKE '%USG%' OR jpr.nm_perawatan LIKE '%Ultrasound%' THEN 'US'
-    WHEN jpr.nm_perawatan LIKE '%XA%' OR jpr.nm_perawatan LIKE '%Angio%' OR jpr.nm_perawatan LIKE '%Angiography%' THEN 'XA'
-    WHEN jpr.nm_perawatan LIKE '%XC%' OR jpr.nm_perawatan LIKE '%X-Ray Cine%' THEN 'XC'
-    ELSE 'OT'
+    CASE
+    -- CT Scan
+    WHEN UPPER(nm_perawatan) LIKE '%CT SCAN%' OR UPPER(nm_perawatan) LIKE 'CT%' THEN 'CT'
+    
+    -- USG/Ultrasound
+    WHEN UPPER(nm_perawatan) LIKE '%USG%' OR UPPER(nm_perawatan) LIKE 'USG%' OR UPPER(nm_perawatan) LIKE '%ULTRASOUND%' THEN 'US'
+    
+    -- MRI
+    WHEN UPPER(nm_perawatan) LIKE '%MRI%' OR UPPER(nm_perawatan) LIKE 'MR%' OR UPPER(nm_perawatan) LIKE '%MAGNETIC RESONANCE%' THEN 'MR'
+    
+    -- Mammografi
+    WHEN UPPER(nm_perawatan) LIKE '%MAMMO%' OR UPPER(nm_perawatan) LIKE '%MAMMOGRAFI%' THEN 'MG'
+    
+    -- Angiografi
+    WHEN UPPER(nm_perawatan) LIKE '%ANGIO%' OR UPPER(nm_perawatan) LIKE '%XA%' OR UPPER(nm_perawatan) LIKE '%ANGIOGRAPHY%' THEN 'XA'
+    
+    -- PET Scan
+    WHEN UPPER(nm_perawatan) LIKE '%PET%' OR UPPER(nm_perawatan) LIKE '%POSITRON%' THEN 'PT'
+    
+    -- Elektrokardiogram
+    WHEN UPPER(nm_perawatan) LIKE '%EKG%' OR UPPER(nm_perawatan) LIKE '%ECG%' OR UPPER(nm_perawatan) LIKE '%ELEKTROKARDIOGRAM%' THEN 'ECG'
+    
+    -- EPS (Electrophysiology)
+    WHEN UPPER(nm_perawatan) LIKE '%EPS%' OR UPPER(nm_perawatan) LIKE '%ELECTROPHYSIOLOGY%' THEN 'EPS'
+    
+    -- Endoscopy
+    WHEN UPPER(nm_perawatan) LIKE '%ENDOSCOPY%' OR UPPER(nm_perawatan) LIKE '%ENDOSKOPI%' OR UPPER(nm_perawatan) LIKE '%ES%' THEN 'ES'
+    
+    -- Nuklir
+    WHEN UPPER(nm_perawatan) LIKE '%NUKLIR%' OR UPPER(nm_perawatan) LIKE '%NUCLEAR%' OR UPPER(nm_perawatan) LIKE '%NM%' THEN 'NM'
+    
+    -- Structured Report
+    WHEN UPPER(nm_perawatan) LIKE '%SR%' OR UPPER(nm_perawatan) LIKE '%STRUCTURED%' THEN 'SR'
+    
+    -- Secondary Capture
+    WHEN UPPER(nm_perawatan) LIKE '%SC%' OR UPPER(nm_perawatan) LIKE '%SECONDARY CAPTURE%' THEN 'SC'
+    
+    -- X-Ray Cine
+    WHEN UPPER(nm_perawatan) LIKE '%XC%' OR UPPER(nm_perawatan) LIKE '%CINE%' THEN 'XC'
+    
+    -- BabyGram (X-ray seluruh bayi)
+    WHEN UPPER(nm_perawatan) LIKE '%BABYGRAM%' THEN 'CR'
+    
+    -- Pemeriksaan yang sudah jelas X-Ray/CR (umum di Indonesia)
+    WHEN UPPER(nm_perawatan) LIKE '%THORAX%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%LUMBOSACRAL%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%VERTEBRA%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%PELVIS%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%FEMUR%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%HIP JOINT%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%HUMERUS%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%ANKLE%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%WRIST%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%MANUS%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%SCAPULA%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%CLAVICULA%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%CRANIUM%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%NASAL%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%GENU%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%CALCANEUS%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%ART GENU%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%CRURIS%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%ELBOW%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%ANTEBRACHI%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%BABYGRAM%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%BNO%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%APPENDICOGRAM%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%SACRUM%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%COCCYGEUS%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%ABDOMEN%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%PEDIS%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%SCAPULA%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%SHOULDER%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%GENU%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%SURVEY%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%CHARGE%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%PRINT FILM%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%TOP LORDOTIK%' THEN 'CR'
+    WHEN UPPER(nm_perawatan) LIKE '%HSG%' OR UPPER(nm_perawatan) LIKE '%CHARGER CHATETER HSG%' THEN 'CR'
+    -- Default mapping jika tidak terdeteksi
+    ELSE 'CR'
     END AS Modality
 FROM
     permintaan_radiologi pr
