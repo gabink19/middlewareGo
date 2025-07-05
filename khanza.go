@@ -58,7 +58,7 @@ func GetPendingWorklist(db *sql.DB, tglPermintaan string) ([]WorklistRequest, er
     p.no_rkm_medis AS AccessionNumber,
 	IFNULL(pj.kd_jenis_prw, '') AS RequestedProcedureID,
 	IFNULL(jpr.nm_perawatan, '') AS RequestedProcedureDescription,
-    CONCAT(pr.noorder, DATE_FORMAT(pr.tgl_permintaan, '%Y%m%d'), REPLACE(pr.jam_permintaan, ':', '')) AS ScheduledProcedureStepID,
+    LEFT(CONCAT(pr.noorder, DATE_FORMAT(pr.tgl_permintaan, '%Y%m%d'), REPLACE(pr.jam_permintaan, ':', '')), 16) AS ScheduledProcedureStepID,
     DATE_FORMAT(pr.tgl_permintaan, '%Y%m%d') AS ScheduledProcedureStepStartDate,
     REPLACE(pr.jam_permintaan, ':', '') AS ScheduledProcedureStepStartTime,
     CASE

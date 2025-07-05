@@ -138,7 +138,7 @@ func processSRWebhook(cfg Config, db, mwdb *sql.DB, bodyBytes []byte) {
 	}
 	log.Printf("Hasil SR %s disimpan ke Khanza", payload.PatientID)
 	SavePortalLog(mwdb, "[SR] Hasil SR "+payload.PatientID+" disimpan ke Khanza")
-	UpdateHasilOrthanc(db, payload.PatientID, string(hasilJSON))
+	UpdateHasilOrthanc(mwdb, payload.PatientID, string(hasilJSON))
 }
 
 func main() {
