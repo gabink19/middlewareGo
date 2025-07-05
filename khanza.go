@@ -61,7 +61,6 @@ func GetPendingWorklist(db *sql.DB, tglPermintaan string) ([]WorklistRequest, er
     CONCAT(pr.noorder, DATE_FORMAT(pr.tgl_permintaan, '%Y%m%d'), REPLACE(pr.jam_permintaan, ':', '')) AS ScheduledProcedureStepID,
     DATE_FORMAT(pr.tgl_permintaan, '%Y%m%d') AS ScheduledProcedureStepStartDate,
     REPLACE(pr.jam_permintaan, ':', '') AS ScheduledProcedureStepStartTime,
-	CASE
     CASE
     -- CT Scan
     WHEN UPPER(nm_perawatan) LIKE '%CT SCAN%' OR UPPER(nm_perawatan) LIKE 'CT%' THEN 'CT'
