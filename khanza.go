@@ -120,10 +120,10 @@ func SaveStudyLinkToKhanza(db *sql.DB, noRawat string, link string) error {
 	return err
 }
 
-func SaveRadiologyResult(db *sql.DB, noRawat, tglPeriksa, jam, hasil, petugas string) error {
+func SaveRadiologyResult(db *sql.DB, noRawat, tglPeriksa, jam, hasil string) error {
 	_, err := db.Exec(
-		"INSERT INTO hasil_radiologi (no_rawat, tgl_periksa, jam, hasil, nip) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE hasil=?, nip=?",
-		noRawat, tglPeriksa, jam, hasil, petugas, hasil, petugas,
+		"INSERT INTO hasil_radiologi (no_rawat, tgl_periksa, jam, hasil) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE hasil=?, no_rawat=?",
+		noRawat, tglPeriksa, jam, hasil, hasil, noRawat,
 	)
 	return err
 }

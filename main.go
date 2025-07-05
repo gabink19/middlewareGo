@@ -132,8 +132,7 @@ func processSRWebhook(cfg Config, db, mwdb *sql.DB, bodyBytes []byte) {
 	log.Printf("Parsed SR content untuk %s: %s", payload.PatientID, string(hasilJSON))
 	tglPeriksa := time.Now().Format("2006-01-02")
 	jam := time.Now().Format("15:04:05")
-	petugas := "SYSTEM"
-	if err := SaveRadiologyResult(db, payload.PatientID, tglPeriksa, jam, string(hasilJSON), petugas); err != nil {
+	if err := SaveRadiologyResult(db, payload.PatientID, tglPeriksa, jam, string(hasilJSON)); err != nil {
 		log.Printf("Gagal simpan hasil SR ke Khanza untuk %s: %v", payload.PatientID, err)
 		SavePortalLog(mwdb, "[SR] Gagal simpan hasil SR ke Khanza untuk "+payload.PatientID+": "+err.Error())
 		return
