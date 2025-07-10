@@ -118,24 +118,54 @@ func GetNewStudiesFromOrthanc(cfg Config) ([]OrthancStudy, error) {
 }
 
 // Parsing isi Structured Report (SR) dari Orthanc
-func ParseSRContentFromOrthanc(cfg Config, instanceID string) ([]string, error) {
-	// instanceID adalah ID instance DICOM SR
-	url := cfg.OrthancURL + "/instances/" + instanceID + "/content"
+func ParseSRContentFromOrthanc(cfg Config, instanceID string) (string, error) {
+	url := cfg.OrthancURL + "/instances/" + instanceID + "/tags"
 	log.Println("Fetching SR content from:", url)
 	resp, err := http.Get(url)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("Orthanc error: %s", resp.Status)
+		return "", fmt.Errorf("Orthanc error: %s", resp.Status)
 	}
-	log.Println("Response Data Series SR:", resp.Status)
-	var srContent []string
 	bodyBytes, _ := io.ReadAll(resp.Body)
-	if err := json.Unmarshal(bodyBytes, &srContent); err != nil {
+
+	// Unmarshal ke map
+	var tags map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &tags); err != nil {
 		log.Printf("Gagal decode SR content: %v", err)
-		return nil, fmt.Errorf("invalid JSON payload: %v", err)
+		return "", fmt.Errorf("invalid JSON payload: %v", err)
 	}
-	return srContent, nil
+
+	// Ambil ContentSequence (0040,a730)
+	contentSeq, ok := tags["0040,a730"].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("ContentSequence (0040,a730) tidak ditemukan")
+	}
+	valArr, ok := contentSeq["Value"].([]interface{})
+	if !ok || len(valArr) == 0 {
+		return "", fmt.Errorf("ContentSequence.Value kosong")
+	}
+	// Ambil item pertama
+	item, ok := valArr[0].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("Item pertama ContentSequence tidak valid")
+	}
+	// Ambil TextValue (0040,a160)
+	textVal, ok := item["0040,a160"].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("TextValue (0040,a160) tidak ditemukan")
+	}
+	val, ok := textVal["Value"].(string)
+	if ok {
+		return val, nil
+	}
+	// Kadang Value bisa []interface{}
+	if arr, ok := textVal["Value"].([]interface{}); ok && len(arr) > 0 {
+		if s, ok := arr[0].(string); ok {
+			return s, nil
+		}
+	}
+	return "", fmt.Errorf("TextValue (0040,a160) tidak ada Value string")
 }

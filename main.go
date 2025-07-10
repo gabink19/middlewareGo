@@ -27,12 +27,6 @@ func processWorklist(cfg Config, db, mwdb *sql.DB) {
 			if IsWorklistSent(mwdb, wl.AccessionNumber) {
 				continue
 			}
-			err := InsertPermintaanPemeriksaanRadiologi(db, wl.PatientID, wl.KdJenisPrw, "Belum")
-			if err != nil {
-				log.Printf("Gagal insert permintaan pemeriksaan radiologi: %v", err)
-				SavePortalLog(mwdb, "[Worklist] Gagal insert permintaan pemeriksaan radiologi untuk "+wl.AccessionNumber+": "+err.Error())
-				continue
-			}
 			SavePortalLog(mwdb, "[Worklist] Proses kirim worklist "+wl.AccessionNumber)
 			marsh, _ := json.Marshal(wl)
 			err = SendWorklistToOrthanc(cfg, wl)
@@ -75,57 +69,7 @@ func processSRWebhook(cfg Config, db, mwdb *sql.DB, bodyBytes []byte) {
 	}
 
 	// Gunakan orthanc_uuid jika tersedia untuk langsung ambil instance
-	instanceID := ""
-	if payload.OrthancUUID != "" {
-		instanceID = payload.OrthancUUID
-	} else {
-		// Backward compatibility: ambil instance dari study->series->instances
-		seriesURL := cfg.OrthancURL + "/studies/" + payload.StudyInstanceUID + "/series"
-		resp, err := http.Get(seriesURL)
-		if err != nil {
-			SavePortalLog(mwdb, "[SR] Gagal ambil series SR: "+err.Error())
-			log.Printf("Gagal ambil series SR: %v", err)
-			return
-		}
-		log.Println("Response Data Series SR:", resp.Status)
-		defer resp.Body.Close()
-
-		var seriesIDs []string
-		if err := json.NewDecoder(resp.Body).Decode(&seriesIDs); err != nil {
-			SavePortalLog(mwdb, "[SR] Gagal decode series SR: "+err.Error())
-			log.Printf("Gagal decode series SR: %v", err)
-			return
-		}
-		if len(seriesIDs) == 0 {
-			SavePortalLog(mwdb, "[SR] Tidak ada series SR ditemukan")
-			log.Printf("Tidak ada series SR ditemukan")
-			return
-		}
-
-		instancesURL := cfg.OrthancURL + "/series/" + seriesIDs[0] + "/instances"
-		resp2, err := http.Get(instancesURL)
-		if err != nil {
-			SavePortalLog(mwdb, "[SR] Gagal ambil instance SR: "+err.Error())
-			log.Printf("Gagal ambil instance SR: %v", err)
-			return
-		}
-		log.Println("Response Data resp2:", resp2.Status)
-		defer resp2.Body.Close()
-
-		var instanceIDs []string
-		if err := json.NewDecoder(resp2.Body).Decode(&instanceIDs); err != nil {
-			SavePortalLog(mwdb, "[SR] Gagal decode instance SR: "+err.Error())
-			log.Printf("Gagal decode instance SR: %v", err)
-			return
-		}
-		if len(instanceIDs) == 0 {
-			SavePortalLog(mwdb, "[SR] Tidak ada instance SR ditemukan")
-			log.Printf("Tidak ada instance SR ditemukan")
-			return
-		}
-		instanceID = instanceIDs[0]
-	}
-
+	instanceID := payload.OrthancUUID
 	SavePortalLog(mwdb, "[SR] Parsing isi SR instance: "+instanceID)
 	srContent, err := ParseSRContentFromOrthanc(cfg, instanceID)
 	if err != nil {
@@ -142,7 +86,7 @@ func processSRWebhook(cfg Config, db, mwdb *sql.DB, bodyBytes []byte) {
 		SavePortalLog(mwdb, "[SR] Gagal simpan hasil SR ke Khanza untuk "+payload.PatientID+": "+err.Error())
 		return
 	}
-	InsertPeriksaRadiologiFromPermintaan(db, payload.PatientID)
+	InsertPeriksaRadiologiFromPermintaan(db, payload.PatientID, payload.Link)
 	log.Printf("Hasil SR %s disimpan ke Khanza", payload.PatientID)
 	SavePortalLog(mwdb, "[SR] Hasil SR "+payload.PatientID+" disimpan ke Khanza")
 	UpdateHasilOrthanc(mwdb, payload.PatientID, string(hasilJSON))
@@ -178,6 +122,7 @@ func main() {
 		bodyBytes, _ := io.ReadAll(r.Body)
 		log.Printf("Menerima webhook r.Body: %s", string(bodyBytes))
 		go processSRWebhook(cfg, db, mwdb, bodyBytes)
+		w.Write([]byte("OK"))
 	})
 
 	for {

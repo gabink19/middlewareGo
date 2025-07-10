@@ -48,115 +48,105 @@ func ConnectKhanzaDB(cfg Config) (*sql.DB, error) {
 
 func GetPendingWorklist(db *sql.DB, tglPermintaan string) ([]WorklistRequest, error) {
 	query := `SELECT
-    pr.noorder AS PatientID,
-    p.nm_pasien AS PatientName,
-    DATE_FORMAT(p.tgl_lahir, '%Y%m%d') AS PatientBirthDate,
-    CASE p.jk
-        WHEN 'L' THEN 'M'
-        WHEN 'P' THEN 'F'
-        ELSE 'O'
-    END AS PatientSex,
-    p.no_rkm_medis AS AccessionNumber,
+	IFNULL(pr.noorder, '') AS PatientID,
+	IFNULL(p.nm_pasien, '') AS PatientName,
+	IFNULL(DATE_FORMAT(p.tgl_lahir, '%Y%m%d'), '') AS PatientBirthDate,
+	IFNULL(
+		CASE p.jk
+			WHEN 'L' THEN 'M'
+			WHEN 'P' THEN 'F'
+			ELSE 'O'
+		END, ''
+	) AS PatientSex,
+	IFNULL(p.no_rkm_medis, '') AS AccessionNumber,
 	IFNULL(pj.kd_jenis_prw, '') AS RequestedProcedureID,
 	IFNULL(jpr.nm_perawatan, '') AS RequestedProcedureDescription,
-    LEFT(CONCAT(pr.noorder, DATE_FORMAT(pr.tgl_permintaan, '%Y%m%d'), REPLACE(pr.jam_permintaan, ':', '')), 16) AS ScheduledProcedureStepID,
-    DATE_FORMAT(pr.tgl_permintaan, '%Y%m%d') AS ScheduledProcedureStepStartDate,
-    REPLACE(pr.jam_permintaan, ':', '') AS ScheduledProcedureStepStartTime,
-    CASE
-    -- CT Scan
-    WHEN UPPER(nm_perawatan) LIKE '%CT SCAN%' OR UPPER(nm_perawatan) LIKE 'CT%' THEN 'CT'
-    
-    -- USG/Ultrasound
-    WHEN UPPER(nm_perawatan) LIKE '%USG%' OR UPPER(nm_perawatan) LIKE 'USG%' OR UPPER(nm_perawatan) LIKE '%ULTRASOUND%' THEN 'US'
-    
-    -- MRI
-    WHEN UPPER(nm_perawatan) LIKE '%MRI%' OR UPPER(nm_perawatan) LIKE 'MR%' OR UPPER(nm_perawatan) LIKE '%MAGNETIC RESONANCE%' THEN 'MR'
-    
-    -- Mammografi
-    WHEN UPPER(nm_perawatan) LIKE '%MAMMO%' OR UPPER(nm_perawatan) LIKE '%MAMMOGRAFI%' THEN 'MG'
-    
-    -- Angiografi
-    WHEN UPPER(nm_perawatan) LIKE '%ANGIO%' OR UPPER(nm_perawatan) LIKE '%XA%' OR UPPER(nm_perawatan) LIKE '%ANGIOGRAPHY%' THEN 'XA'
-    
-    -- PET Scan
-    WHEN UPPER(nm_perawatan) LIKE '%PET%' OR UPPER(nm_perawatan) LIKE '%POSITRON%' THEN 'PT'
-    
-    -- Elektrokardiogram
-    WHEN UPPER(nm_perawatan) LIKE '%EKG%' OR UPPER(nm_perawatan) LIKE '%ECG%' OR UPPER(nm_perawatan) LIKE '%ELEKTROKARDIOGRAM%' THEN 'ECG'
-    
-    -- EPS (Electrophysiology)
-    WHEN UPPER(nm_perawatan) LIKE '%EPS%' OR UPPER(nm_perawatan) LIKE '%ELECTROPHYSIOLOGY%' THEN 'EPS'
-    
-    -- Endoscopy
-    WHEN UPPER(nm_perawatan) LIKE '%ENDOSCOPY%' OR UPPER(nm_perawatan) LIKE '%ENDOSKOPI%' OR UPPER(nm_perawatan) LIKE '%ES%' THEN 'ES'
-    
-    -- Nuklir
-    WHEN UPPER(nm_perawatan) LIKE '%NUKLIR%' OR UPPER(nm_perawatan) LIKE '%NUCLEAR%' OR UPPER(nm_perawatan) LIKE '%NM%' THEN 'NM'
-    
-    -- Structured Report
-    WHEN UPPER(nm_perawatan) LIKE '%SR%' OR UPPER(nm_perawatan) LIKE '%STRUCTURED%' THEN 'SR'
-    
-    -- Secondary Capture
-    WHEN UPPER(nm_perawatan) LIKE '%SC%' OR UPPER(nm_perawatan) LIKE '%SECONDARY CAPTURE%' THEN 'SC'
-    
-    -- X-Ray Cine
-    WHEN UPPER(nm_perawatan) LIKE '%XC%' OR UPPER(nm_perawatan) LIKE '%CINE%' THEN 'XC'
-    
-    -- BabyGram (X-ray seluruh bayi)
-    WHEN UPPER(nm_perawatan) LIKE '%BABYGRAM%' THEN 'CR'
-    
-    -- Pemeriksaan yang sudah jelas X-Ray/CR (umum di Indonesia)
-    WHEN UPPER(nm_perawatan) LIKE '%THORAX%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%LUMBOSACRAL%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%VERTEBRA%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%PELVIS%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%FEMUR%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%HIP JOINT%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%HUMERUS%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%ANKLE%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%WRIST%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%MANUS%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%SCAPULA%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%CLAVICULA%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%CRANIUM%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%NASAL%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%GENU%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%CALCANEUS%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%ART GENU%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%CRURIS%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%ELBOW%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%ANTEBRACHI%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%BABYGRAM%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%BNO%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%APPENDICOGRAM%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%SACRUM%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%COCCYGEUS%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%ABDOMEN%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%PEDIS%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%SCAPULA%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%SHOULDER%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%GENU%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%SURVEY%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%CHARGE%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%PRINT FILM%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%TOP LORDOTIK%' THEN 'CR'
-    WHEN UPPER(nm_perawatan) LIKE '%HSG%' OR UPPER(nm_perawatan) LIKE '%CHARGER CHATETER HSG%' THEN 'CR'
-    -- Default mapping jika tidak terdeteksi
-    ELSE 'CR'
-    END AS Modality,
-	pj.kd_jenis_prw as KdJenisPrw
+	IFNULL(LEFT(CONCAT(pr.noorder, DATE_FORMAT(pr.tgl_permintaan, '%Y%m%d'), REPLACE(pr.jam_permintaan, ':', '')), 16), '') AS ScheduledProcedureStepID,
+	IFNULL(DATE_FORMAT(pr.tgl_permintaan, '%Y%m%d'), '') AS ScheduledProcedureStepStartDate,
+	IFNULL(REPLACE(pr.jam_permintaan, ':', ''), '') AS ScheduledProcedureStepStartTime,
+	IFNULL(
+		CASE
+		-- CT Scan
+		WHEN UPPER(nm_perawatan) LIKE '%CT SCAN%' OR UPPER(nm_perawatan) LIKE 'CT%' THEN 'CT'
+		-- USG/Ultrasound
+		WHEN UPPER(nm_perawatan) LIKE '%USG%' OR UPPER(nm_perawatan) LIKE 'USG%' OR UPPER(nm_perawatan) LIKE '%ULTRASOUND%' THEN 'US'
+		-- MRI
+		WHEN UPPER(nm_perawatan) LIKE '%MRI%' OR UPPER(nm_perawatan) LIKE 'MR%' OR UPPER(nm_perawatan) LIKE '%MAGNETIC RESONANCE%' THEN 'MR'
+		-- Mammografi
+		WHEN UPPER(nm_perawatan) LIKE '%MAMMO%' OR UPPER(nm_perawatan) LIKE '%MAMMOGRAFI%' THEN 'MG'
+		-- Angiografi
+		WHEN UPPER(nm_perawatan) LIKE '%ANGIO%' OR UPPER(nm_perawatan) LIKE '%XA%' OR UPPER(nm_perawatan) LIKE '%ANGIOGRAPHY%' THEN 'XA'
+		-- PET Scan
+		WHEN UPPER(nm_perawatan) LIKE '%PET%' OR UPPER(nm_perawatan) LIKE '%POSITRON%' THEN 'PT'
+		-- Elektrokardiogram
+		WHEN UPPER(nm_perawatan) LIKE '%EKG%' OR UPPER(nm_perawatan) LIKE '%ECG%' OR UPPER(nm_perawatan) LIKE '%ELEKTROKARDIOGRAM%' THEN 'ECG'
+		-- EPS (Electrophysiology)
+		WHEN UPPER(nm_perawatan) LIKE '%EPS%' OR UPPER(nm_perawatan) LIKE '%ELECTROPHYSIOLOGY%' THEN 'EPS'
+		-- Endoscopy
+		WHEN UPPER(nm_perawatan) LIKE '%ENDOSCOPY%' OR UPPER(nm_perawatan) LIKE '%ENDOSKOPI%' OR UPPER(nm_perawatan) LIKE '%ES%' THEN 'ES'
+		-- Nuklir
+		WHEN UPPER(nm_perawatan) LIKE '%NUKLIR%' OR UPPER(nm_perawatan) LIKE '%NUCLEAR%' OR UPPER(nm_perawatan) LIKE '%NM%' THEN 'NM'
+		-- Structured Report
+		WHEN UPPER(nm_perawatan) LIKE '%SR%' OR UPPER(nm_perawatan) LIKE '%STRUCTURED%' THEN 'SR'
+		-- Secondary Capture
+		WHEN UPPER(nm_perawatan) LIKE '%SC%' OR UPPER(nm_perawatan) LIKE '%SECONDARY CAPTURE%' THEN 'SC'
+		-- X-Ray Cine
+		WHEN UPPER(nm_perawatan) LIKE '%XC%' OR UPPER(nm_perawatan) LIKE '%CINE%' THEN 'XC'
+		-- BabyGram (X-ray seluruh bayi)
+		WHEN UPPER(nm_perawatan) LIKE '%BABYGRAM%' THEN 'CR'
+		-- Pemeriksaan yang sudah jelas X-Ray/CR (umum di Indonesia)
+		WHEN UPPER(nm_perawatan) LIKE '%THORAX%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%LUMBOSACRAL%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%VERTEBRA%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%PELVIS%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%FEMUR%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%HIP JOINT%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%HUMERUS%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%ANKLE%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%WRIST%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%MANUS%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%SCAPULA%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%CLAVICULA%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%CRANIUM%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%NASAL%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%GENU%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%CALCANEUS%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%ART GENU%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%CRURIS%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%ELBOW%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%ANTEBRACHI%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%BABYGRAM%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%BNO%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%APPENDICOGRAM%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%SACRUM%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%COCCYGEUS%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%ABDOMEN%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%PEDIS%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%SCAPULA%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%SHOULDER%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%GENU%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%SURVEY%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%CHARGE%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%PRINT FILM%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%TOP LORDOTIK%' THEN 'CR'
+		WHEN UPPER(nm_perawatan) LIKE '%HSG%' OR UPPER(nm_perawatan) LIKE '%CHARGER CHATETER HSG%' THEN 'CR'
+		-- Default mapping jika tidak terdeteksi
+		ELSE 'CR'
+		END, ''
+	) AS Modality,
+	IFNULL(pj.kd_jenis_prw, '') as KdJenisPrw
 FROM
-    permintaan_radiologi pr
+	permintaan_radiologi pr
 JOIN
-    reg_periksa r ON pr.no_rawat = r.no_rawat
+	reg_periksa r ON pr.no_rawat = r.no_rawat
 JOIN
-    pasien p ON r.no_rkm_medis = p.no_rkm_medis
+	pasien p ON r.no_rkm_medis = p.no_rkm_medis
 LEFT JOIN
-    permintaan_pemeriksaan_radiologi pj ON pj.noorder LIKE CONCAT(pr.no_rawat, '%')
+	permintaan_pemeriksaan_radiologi pj ON pj.noorder LIKE CONCAT(pr.no_rawat, '%')
 LEFT JOIN
-    jns_perawatan_radiologi jpr ON pj.kd_jenis_prw = jpr.kd_jenis_prw
+	jns_perawatan_radiologi jpr ON pj.kd_jenis_prw = jpr.kd_jenis_prw
 WHERE
-    pr.tgl_permintaan = ?`
+	pr.tgl_permintaan = ?`
 
 	rows, err := db.Query(query, tglPermintaan)
 	if err != nil {
@@ -218,12 +208,39 @@ func SaveRadiologyResult(db *sql.DB, noorder, tglPeriksa, jam, hasil string) err
 	return err
 }
 
-func InsertPermintaanPemeriksaanRadiologi(db *sql.DB, noorder, kdJenisPrw, status string) error {
-	// Cek apakah sudah ada data dengan noorder dan kd_jenis_prw yang sama
+func InsertPeriksaRadiologiFromPermintaan(db *sql.DB, noorder, linkGambar string) error {
+	// Ambil data dari relasi tabel yang diperlukan
+	var (
+		noRawat, tglPeriksa, jam, kdDokter, kdJenisPrw, status string
+		biaya                                                  float64
+	)
+	query := `
+        SELECT
+            pr.no_rawat,
+            pr.tgl_permintaan,
+            pr.jam_permintaan,
+            pr.dokter_perujuk,
+            pj.kd_jenis_prw,
+            IFNULL(jpr.total_byr, 0) AS biaya,
+            pr.status
+        FROM permintaan_radiologi pr
+        LEFT JOIN permintaan_pemeriksaan_radiologi pj ON pj.noorder = pr.noorder
+        LEFT JOIN jns_perawatan_radiologi jpr ON pj.kd_jenis_prw = jpr.kd_jenis_prw
+        WHERE pr.noorder = ?
+        LIMIT 1
+        `
+	err := db.QueryRow(query, noorder).Scan(
+		&noRawat, &tglPeriksa, &jam, &kdDokter, &kdJenisPrw, &biaya, &status,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Cek apakah data sudah ada di periksa_radiologi
 	var count int
-	err := db.QueryRow(
-		`SELECT COUNT(*) FROM permintaan_pemeriksaan_radiologi WHERE noorder = ? AND kd_jenis_prw = ?`,
-		noorder, kdJenisPrw,
+	err = db.QueryRow(
+		`SELECT COUNT(*) FROM periksa_radiologi WHERE no_rawat = ? AND kd_jenis_prw = ? AND tgl_periksa = ? AND jam = ?`,
+		noRawat, kdJenisPrw, tglPeriksa, jam,
 	).Scan(&count)
 	if err != nil {
 		return err
@@ -233,54 +250,16 @@ func InsertPermintaanPemeriksaanRadiologi(db *sql.DB, noorder, kdJenisPrw, statu
 		return nil
 	}
 
-	// Insert data baru
-	_, err = db.Exec(
-		`INSERT INTO permintaan_pemeriksaan_radiologi (noorder, kd_jenis_prw, status) VALUES (?, ?, ?)`,
-		noorder, kdJenisPrw, status,
-	)
-
-	return err
-}
-
-func InsertPeriksaRadiologiFromPermintaan(db *sql.DB, noorder string) error {
-	// Ambil data dari relasi tabel yang diperlukan
-	var (
-		noRawat, tglPeriksa, jam, kdDokter, nipPetugas, kdJenisPrw, hasil, biaya, status, kdBagian, nipPerujuk, kdPenjab string
-	)
-	query := `
-SELECT
-    pr.no_rawat,
-    pr.tgl_permintaan,
-    pr.jam_permintaan,
-    pr.kd_dokter_perujuk,
-    pr.nip_petugas,
-    pj.kd_jenis_prw,
-    IFNULL(hr.hasil, '') AS hasil,
-    IFNULL(jpr.total_byr, 0) AS biaya,
-    pr.status,
-    IFNULL(pr.kd_bagian_radiologi, '') AS kd_bagian,
-    IFNULL(pr.nip_perujuk, '') AS nip_perujuk,
-    IFNULL(r.kd_pj, '') AS kd_penjab
-FROM permintaan_radiologi pr
-LEFT JOIN permintaan_pemeriksaan_radiologi pj ON pj.noorder = pr.noorder
-LEFT JOIN hasil_radiologi hr ON hr.no_rawat = pr.no_rawat
-LEFT JOIN jns_perawatan_radiologi jpr ON pj.kd_jenis_prw = jpr.kd_jenis_prw
-LEFT JOIN reg_periksa r ON pr.no_rawat = r.no_rawat
-WHERE pr.noorder = ?
-LIMIT 1
-`
-	err := db.QueryRow(query, noorder).Scan(
-		&noRawat, &tglPeriksa, &jam, &kdDokter, &nipPetugas, &kdJenisPrw, &hasil, &biaya, &status, &kdBagian, &nipPerujuk, &kdPenjab,
-	)
-	if err != nil {
-		return err
-	}
-
-	// Insert ke tabel periksa_radiologi
 	_, err = db.Exec(`
-INSERT INTO periksa_radiologi (
-    no_rawat, tgl_periksa, jam, kd_dokter, nip, kd_jenis_prw, hasil, biaya, status, kd_bagian_radiologi, nip_perujuk, kd_pj
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`, noRawat, tglPeriksa, jam, kdDokter, nipPetugas, kdJenisPrw, hasil, biaya, status, kdBagian, nipPerujuk, kdPenjab)
+        INSERT INTO periksa_radiologi (
+            no_rawat, tgl_periksa, jam, kd_dokter, kd_jenis_prw, biaya, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, noRawat, tglPeriksa, jam, kdDokter, kdJenisPrw, biaya, status)
+
+	_, err = db.Exec(`
+        INSERT INTO gambar_radiologi (
+            no_rawat, tgl_periksa, jam, lokasi_gambar
+        ) VALUES (?, ?, ?, ?)
+        `, noRawat, tglPeriksa, jam, linkGambar)
 	return err
 }
