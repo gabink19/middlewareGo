@@ -208,11 +208,11 @@ func SaveRadiologyResult(db *sql.DB, noorder, tglPeriksa, jam, hasil string) err
 	return err
 }
 
-func InsertPeriksaRadiologiFromPermintaan(db *sql.DB, noorder, linkGambar string) error {
+func InsertPeriksaRadiologiFromPermintaan(db *sql.DB, noorder, jam, linkGambar string) error {
 	// Ambil data dari relasi tabel yang diperlukan
 	var (
-		noRawat, tglPeriksa, jam, kdDokter, kdJenisPrw, status string
-		biaya                                                  float64
+		noRawat, tglPeriksa, kdDokter, kdJenisPrw, status string
+		biaya                                             float64
 	)
 	query := `
         SELECT
