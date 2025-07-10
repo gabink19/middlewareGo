@@ -81,15 +81,20 @@ func processSRWebhook(cfg Config, db, mwdb *sql.DB, bodyBytes []byte) {
 	hasilJSON, _ := json.MarshalIndent(srContent, "", "  ")
 	tglPeriksa := time.Now().Format("2006-01-02")
 	jam := time.Now().Format("15:04:05")
+	if err := InsertPeriksaRadiologiFromPermintaan(db, payload.PatientID, jam, payload.Link); err != nil {
+		log.Printf("Gagal1 simpan hasil SR ke Khanza untuk %s: %v", payload.PatientID, err)
+		SavePortalLog(mwdb, "[SR] Gagal simpan hasil SR ke Khanza untuk "+payload.PatientID+": "+err.Error())
+		return
+	}
 	if err := SaveRadiologyResult(db, payload.PatientID, tglPeriksa, jam, string(hasilJSON)); err != nil {
-		log.Printf("Gagal simpan hasil SR ke Khanza untuk %s: %v", payload.PatientID, err)
+		log.Printf("Gagal2 simpan hasil SR ke Khanza untuk %s: %v", payload.PatientID, err)
 		SavePortalLog(mwdb, "[SR] Gagal simpan hasil SR ke Khanza untuk "+payload.PatientID+": "+err.Error())
 		return
 	}
 	InsertPeriksaRadiologiFromPermintaan(db, payload.PatientID, jam, payload.Link)
 	log.Printf("Hasil SR %s disimpan ke Khanza", payload.PatientID)
 	SavePortalLog(mwdb, "[SR] Hasil SR "+payload.PatientID+" disimpan ke Khanza")
-	UpdateHasilOrthanc(mwdb, payload.PatientID, string(hasilJSON))
+	UpdateHasilOrthanc(mwdb, payload.Accession, string(hasilJSON))
 }
 
 func main() {
