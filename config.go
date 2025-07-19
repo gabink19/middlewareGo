@@ -17,6 +17,8 @@ type Config struct {
 	DBKhanzaName     string
 	OrthancURL       string
 	OHIFURL          string
+	OrthancUser      string
+	OrthancPass      string
 }
 
 func LoadConfig() Config {
@@ -33,5 +35,7 @@ func LoadConfig() Config {
 		DBKhanzaName:     os.Getenv("KHANZA_DB_NAME"),
 		OrthancURL:       os.Getenv("ORTHANC_URL"),
 		OHIFURL:          os.Getenv("OHIF_URL"),
+		OrthancUser:      os.Getenv("ORTHANC_USER"),
+		OrthancPass:      os.Getenv("ORTHANC_PASS"),
 	}
 }

@@ -121,7 +121,16 @@ func GetNewStudiesFromOrthanc(cfg Config) ([]OrthancStudy, error) {
 func ParseSRContentFromOrthanc(cfg Config, instanceID string) (string, error) {
 	url := cfg.OrthancURL + "/instances/" + instanceID + "/tags"
 	log.Println("Fetching SR content from:", url)
-	resp, err := http.Get(url)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", err
+	}
+	// Tambahkan autentikasi basic auth
+	req.SetBasicAuth(cfg.OrthancUser, cfg.OrthancPass)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
