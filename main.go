@@ -7,39 +7,59 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"sync"
 	"time"
 
 	"github.com/joho/godotenv"
 )
 
+var worklistMutex sync.Mutex
+var logMutex sync.Mutex
+
 func processWorklist(cfg Config, db, mwdb *sql.DB) {
 	for {
+		worklistMutex.Lock()
 		worklists, err := GetPendingWorklist(db, time.Now().Format("2006-01-02"))
+		worklistMutex.Unlock()
 		if err != nil {
-			log.Printf("Gagal ambil worklist: %v", err)
+			logMutex.Lock()
 			SavePortalLog(mwdb, "[Worklist] Gagal ambil worklist: "+err.Error())
+			logMutex.Unlock()
 			UpdateWorklists(nil)
-			time.Sleep(10 * time.Second)
+			time.Sleep(1 * time.Second)
 			continue
 		}
 		// var wlPortal []Worklist
 		for _, wl := range worklists {
-			if IsWorklistSent(mwdb, wl.AccessionNumber) {
+			worklistMutex.Lock()
+			if IsWorklistSent(mwdb, wl.PatientID) {
+				worklistMutex.Unlock()
 				continue
 			}
-			SavePortalLog(mwdb, "[Worklist] Proses kirim worklist "+wl.AccessionNumber)
+			worklistMutex.Unlock()
+
+			logMutex.Lock()
+			SavePortalLog(mwdb, "[Worklist] Proses kirim worklist "+wl.PatientID)
+			logMutex.Unlock()
+
 			marsh, _ := json.Marshal(wl)
 			err = SendWorklistToOrthanc(cfg, wl)
 			if err != nil {
-				log.Printf("Gagal kirim worklist ke Orthanc untuk %s: %v", wl.AccessionNumber, err)
-				SavePortalLog(mwdb, "[Worklist] Gagal kirim worklist ke Orthanc untuk "+wl.AccessionNumber+": "+err.Error())
+				logMutex.Lock()
+				SavePortalLog(mwdb, "[Worklist] Gagal kirim worklist ke Orthanc untuk "+wl.PatientID+": "+err.Error())
+				logMutex.Unlock()
 				continue
 			}
-			log.Printf("Worklist %s dikirim ke Orthanc", wl.AccessionNumber)
-			SavePortalLog(mwdb, "[Worklist] Worklist "+wl.AccessionNumber+" dikirim ke Orthanc")
-			InsertSentWorklist(mwdb, wl.AccessionNumber, string(marsh))
+			logMutex.Lock()
+			SavePortalLog(mwdb, "[Worklist] Worklist "+wl.PatientID+" dikirim ke Orthanc")
+			logMutex.Unlock()
+
+			worklistMutex.Lock()
+			InsertSentWorklist(mwdb, wl.PatientID, string(marsh))
+			worklistMutex.Unlock()
 		}
-		time.Sleep(30 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 }
 
@@ -94,7 +114,7 @@ func processSRWebhook(cfg Config, db, mwdb *sql.DB, bodyBytes []byte) {
 	InsertPeriksaRadiologiFromPermintaan(db, payload.PatientID, jam, payload.Link)
 	log.Printf("Hasil SR %s disimpan ke Khanza", payload.PatientID)
 	SavePortalLog(mwdb, "[SR] Hasil SR "+payload.PatientID+" disimpan ke Khanza")
-	UpdateHasilOrthanc(mwdb, payload.Accession, string(hasilJSON))
+	UpdateHasilOrthanc(mwdb, payload.PatientID, string(hasilJSON))
 }
 
 func main() {
@@ -135,8 +155,8 @@ func main() {
 		status := Status{
 			KhanzaDB:     db.Ping() == nil,
 			MiddlewareDB: mwdb.Ping() == nil,
-			Orthanc:      checkHTTPConnection("http://localhost:8042/"),
-			OHIF:         checkHTTPConnection("http://localhost:3000/"),
+			Orthanc:      checkHTTPConnection(os.Getenv("ORTHANC_URL")),
+			// OHIF:         checkHTTPConnection(os.Getenv("OHIF_URL")),
 		}
 		UpdateStatus(status)
 

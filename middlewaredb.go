@@ -52,7 +52,7 @@ func IsWorklistSent(db *sql.DB, nomorOrder string) bool {
 
 // Mencatat worklist yang sudah dikirim
 func InsertSentWorklist(db *sql.DB, nomorOrder, worklist string) {
-	_, err := db.Exec(`INSERT INTO sent_worklist (nomor_order, worklist, tgl_masuk_worklist) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE tgl_kirim_worklist=NOW()`, nomorOrder, worklist)
+	_, err := db.Exec(`INSERT INTO sent_worklist (nomor_order, worklist, tgl_masuk_worklist, tgl_kirim_worklist) VALUES (?, ?, NOW(), NOW())`, nomorOrder, worklist)
 	if err != nil {
 		log.Printf("Error insert sent_worklist: %v", err)
 	}
@@ -60,7 +60,7 @@ func InsertSentWorklist(db *sql.DB, nomorOrder, worklist string) {
 
 // Update hasil orthanc dan tanggal simpan hasil
 func UpdateHasilOrthanc(db *sql.DB, nomorOrder, hasilOrthanc string) {
-	_, err := db.Exec(`UPDATE sent_worklist SET hasil_orthanc=?, tgl_simpan_hasil=NOW() WHERE nomor_order=?`, hasilOrthanc, nomorOrder)
+	_, err := db.Exec(`UPDATE sent_worklist SET hasil_orthanc=?, tgl_terima_hasil=NOW(), tgl_simpan_hasil=NOW() WHERE nomor_order=?`, hasilOrthanc, nomorOrder)
 	if err != nil {
 		log.Printf("Error update hasil_orthanc: %v", err)
 	}

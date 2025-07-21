@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"time"
 
@@ -142,7 +143,7 @@ JOIN
 JOIN
 	pasien p ON r.no_rkm_medis = p.no_rkm_medis
 LEFT JOIN
-	permintaan_pemeriksaan_radiologi pj ON pj.noorder LIKE CONCAT(pr.no_rawat, '%')
+	permintaan_pemeriksaan_radiologi pj ON pj.noorder = pr.noorder
 LEFT JOIN
 	jns_perawatan_radiologi jpr ON pj.kd_jenis_prw = jpr.kd_jenis_prw
 WHERE
@@ -178,7 +179,7 @@ WHERE
 		requests = append(requests, req)
 	}
 	for _, v := range requests {
-		v.AccessionNumber = v.Modality + v.AccessionNumber + time.Now().Format("2006010215")
+		v.AccessionNumber = v.Modality + v.AccessionNumber + fmt.Sprintf("%d", time.Now().Unix())
 		newReq = append(newReq, v)
 	}
 	return newReq, nil
@@ -208,58 +209,113 @@ func SaveRadiologyResult(db *sql.DB, noorder, tglPeriksa, jam, hasil string) err
 	return err
 }
 
-func InsertPeriksaRadiologiFromPermintaan(db *sql.DB, noorder, jam, linkGambar string) error {
+func InsertPeriksaRadiologiFromPermintaan(db *sql.DB, noorder, jamHasil, linkGambar string) error {
+	// Mulai transaksi
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
 	// Ambil data dari relasi tabel yang diperlukan
 	var (
 		noRawat, tglPeriksa, kdDokter, kdJenisPrw, status string
 		biaya                                             float64
 	)
 	query := `
-        SELECT
-            pr.no_rawat,
-            pr.tgl_permintaan,
-            pr.jam_permintaan,
-            pr.dokter_perujuk,
-            pj.kd_jenis_prw,
-            IFNULL(jpr.total_byr, 0) AS biaya,
-            pr.status
-        FROM permintaan_radiologi pr
-        LEFT JOIN permintaan_pemeriksaan_radiologi pj ON pj.noorder = pr.noorder
-        LEFT JOIN jns_perawatan_radiologi jpr ON pj.kd_jenis_prw = jpr.kd_jenis_prw
-        WHERE pr.noorder = ?
-        LIMIT 1
-        `
-	err := db.QueryRow(query, noorder).Scan(
-		&noRawat, &tglPeriksa, &jam, &kdDokter, &kdJenisPrw, &biaya, &status,
+		SELECT
+			IFNULL(pr.no_rawat, '') AS no_rawat,
+			IFNULL(pr.tgl_permintaan, '') AS tgl_permintaan,
+			IFNULL(pr.dokter_perujuk, '') AS dokter_perujuk,
+			IFNULL(pj.kd_jenis_prw, '') AS kd_jenis_prw,
+			IFNULL(jpr.total_byr, 0) AS biaya,
+			IFNULL(pr.status, '') AS status
+		FROM permintaan_radiologi pr
+		LEFT JOIN permintaan_pemeriksaan_radiologi pj ON pj.noorder = pr.noorder
+		LEFT JOIN jns_perawatan_radiologi jpr ON pj.kd_jenis_prw = jpr.kd_jenis_prw
+		WHERE pr.noorder = ?
+		LIMIT 1
+		`
+	err = tx.QueryRow(query, noorder).Scan(
+		&noRawat, &tglPeriksa, &kdDokter, &kdJenisPrw, &biaya, &status,
 	)
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 
 	// Cek apakah data sudah ada di periksa_radiologi
 	var count int
-	err = db.QueryRow(
+	err = tx.QueryRow(
 		`SELECT COUNT(*) FROM periksa_radiologi WHERE no_rawat = ? AND kd_jenis_prw = ? AND tgl_periksa = ? AND jam = ?`,
-		noRawat, kdJenisPrw, tglPeriksa, jam,
+		noRawat, kdJenisPrw, tglPeriksa, jamHasil,
 	).Scan(&count)
 	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	if count > 0 {
-		// Sudah ada, tidak perlu insert lagi
+		tx.Rollback()
 		return nil
 	}
 
-	_, err = db.Exec(`
-        INSERT INTO periksa_radiologi (
-            no_rawat, tgl_periksa, jam, kd_dokter, kd_jenis_prw, biaya, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        `, noRawat, tglPeriksa, jam, kdDokter, kdJenisPrw, biaya, status)
+	_, err = tx.Exec("UPDATE permintaan_radiologi SET tgl_sampel=? , jam_sampel=?, tgl_hasil=?, jam_hasil=? WHERE noorder = ?", tglPeriksa, jamHasil, tglPeriksa, jamHasil, noorder)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
 
-	_, err = db.Exec(`
-        INSERT INTO gambar_radiologi (
+	_, err = tx.Exec(`
+        INSERT INTO periksa_radiologi (
+            no_rawat, nip, kd_jenis_prw, tgl_periksa, jam, dokter_perujuk, bagian_rs, bhp, tarif_perujuk, tarif_tindakan_dokter, tarif_tindakan_petugas, kso, menejemen, biaya, kd_dokter, status, proyeksi, kV, mAS, FFD, BSF, inak, jml_penyinaran, dosis
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE no_rawat = no_rawat
+        `,
+		noRawat,    // no_rawat
+		"-",        // nip
+		kdJenisPrw, // kd_jenis_prw
+		tglPeriksa, // tgl_periksa
+		jamHasil,   // jam
+		"-",        // dokter_perujuk
+		0,          // bagian_rs
+		0,          // bhp
+		0,          // tarif_perujuk
+		0,          // tarif_tindakan_dokter
+		0,          // tarif_tindakan_petugas
+		0,          // kso
+		0,          // menejemen
+		biaya,      // biaya
+		kdDokter,   // kd_dokter
+		status,     // status
+		"-",        // proyeksi
+		"-",        // kV
+		"-",        // mAS
+		"-",        // FFD
+		"-",        // BSF
+		"-",        // inak
+		"-",        // jml_penyinaran
+		"-",        // dosis
+	)
+	if err != nil {
+		log.Println("err:", err)
+		tx.Rollback()
+		return err
+	}
+
+	_, err = tx.Exec(`
+        INSERT IGNORE INTO gambar_radiologi (
             no_rawat, tgl_periksa, jam, lokasi_gambar
         ) VALUES (?, ?, ?, ?)
-        `, noRawat, tglPeriksa, jam, linkGambar)
-	return err
+        `, noRawat, tglPeriksa, jamHasil, linkGambar)
+	if err != nil {
+		log.Println("err2:", err)
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
 }

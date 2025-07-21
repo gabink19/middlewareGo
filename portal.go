@@ -61,7 +61,7 @@ var (
 	CurrentStatus    Status
 	CurrentWorklists []Worklist
 	statusMutex      sync.RWMutex
-	worklistMutex    sync.RWMutex
+	portalMutex      sync.RWMutex
 )
 
 // Fungsi untuk update status dari main.go
@@ -73,8 +73,8 @@ func UpdateStatus(s Status) {
 
 // Fungsi untuk update worklist dari main.go
 func UpdateWorklists(wl []Worklist) {
-	worklistMutex.Lock()
-	defer worklistMutex.Unlock()
+	portalMutex.Lock()
+	defer portalMutex.Unlock()
 	CurrentWorklists = wl
 }
 
@@ -87,8 +87,8 @@ func GetStatus() Status {
 
 // Fungsi untuk baca worklist (untuk handler)
 func GetWorklists() []Worklist {
-	worklistMutex.RLock()
-	defer worklistMutex.RUnlock()
+	portalMutex.RLock()
+	defer portalMutex.RUnlock()
 	return CurrentWorklists
 }
 
@@ -108,6 +108,10 @@ func GetPortalLogs(db *sql.DB, limit int) ([]string, error) {
 		if err := rows.Scan(&msg); err == nil {
 			logs = append(logs, msg)
 		}
+	}
+	// Jika hasil kosong, return slice kosong (bukan nil)
+	if logs == nil {
+		logs = []string{}
 	}
 	// reverse agar urutan lama ke baru
 	for i, j := 0, len(logs)-1; i < j; i, j = i+1, j-1 {
@@ -142,7 +146,7 @@ func StartPortalServer(db *sql.DB, mwdb *sql.DB) {
         <tr><td>DB Khanza</td><td id="status-khanza">{{if .Status.KhanzaDB}}<span class='ok'>Tersambung</span>{{else}}<span class='fail'>Gagal</span>{{end}}</td></tr>
         <tr><td>DB Middleware</td><td id="status-mw">{{if .Status.MiddlewareDB}}<span class='ok'>Tersambung</span>{{else}}<span class='fail'>Gagal</span>{{end}}</td></tr>
         <tr><td>Orthanc</td><td id="status-orthanc">{{if .Status.Orthanc}}<span class='ok'>Tersambung</span>{{else}}<span class='fail'>Gagal</span>{{end}}</td></tr>
-        <tr><td>OHIF</td><td id="status-ohif">{{if .Status.OHIF}}<span class='ok'>Tersambung</span>{{else}}<span class='fail'>Gagal</span>{{end}}</td></tr>
+        <!-- <tr><td>OHIF</td><td id="status-ohif">{{if .Status.OHIF}}<span class='ok'>Tersambung</span>{{else}}<span class='fail'>Gagal</span>{{end}}</td></tr> -->	
     </table>
     <div id="logbox" class="logbox">
     {{range .Logs}}{{.}}<br>{{end}}
@@ -163,7 +167,7 @@ func StartPortalServer(db *sql.DB, mwdb *sql.DB) {
             document.getElementById('status-khanza').innerHTML = st.khanza_db ? "<span class='ok'>Tersambung</span>" : "<span class='fail'>Gagal</span>";
             document.getElementById('status-mw').innerHTML = st.middleware_db ? "<span class='ok'>Tersambung</span>" : "<span class='fail'>Gagal</span>";
             document.getElementById('status-orthanc').innerHTML = st.orthanc ? "<span class='ok'>Tersambung</span>" : "<span class='fail'>Gagal</span>";
-            document.getElementById('status-ohif').innerHTML = st.ohif ? "<span class='ok'>Tersambung</span>" : "<span class='fail'>Gagal</span>";
+            // document.getElementById('status-ohif').innerHTML = st.ohif ? "<span class='ok'>Tersambung</span>" : "<span class='fail'>Gagal</span>";
         });
     }
     window.onload = function() {
